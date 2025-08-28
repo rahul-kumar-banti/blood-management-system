@@ -4,6 +4,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -134,6 +137,27 @@ public class BloodInventoryService {
         return inventory;
     }
     
+    /**
+     * Converts a date string to ISO datetime format for the backend
+     */
+    private String formatDateForBackend(String dateString) {
+        if (dateString == null || dateString.trim().isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // Parse the date string (YYYY-MM-DD format)
+            LocalDate date = LocalDate.parse(dateString.trim());
+            // Convert to LocalDateTime at midnight (00:00:00)
+            LocalDateTime dateTime = date.atStartOfDay();
+            // Format as ISO datetime string
+            return dateTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (Exception e) {
+            // If parsing fails, return the original string
+            return dateString;
+        }
+    }
+    
     private String inventoryToJson(BloodInventory inventory) {
         StringBuilder json = new StringBuilder();
         json.append("{");
@@ -141,7 +165,13 @@ public class BloodInventoryService {
         json.append("\"quantity\":").append(inventory.getQuantity()).append(",");
         json.append("\"unit\":\"").append(inventory.getUnit()).append("\",");
         json.append("\"status\":\"").append(inventory.getStatus()).append("\",");
-        json.append("\"expiryDate\":\"").append(inventory.getExpiryDate()).append("\",");
+        
+        // Format the expiry date properly for the backend
+        String formattedExpiryDate = formatDateForBackend(inventory.getExpiryDate());
+        if (formattedExpiryDate != null) {
+            json.append("\"expiryDate\":\"").append(formattedExpiryDate).append("\",");
+        }
+        
         json.append("\"batchNumber\":\"").append(inventory.getBatchNumber()).append("\"");
         json.append("}");
         return json.toString();
