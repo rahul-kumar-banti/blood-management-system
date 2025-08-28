@@ -3,8 +3,11 @@ package com.bloodbank.controller;
 import com.bloodbank.entity.BloodInventory;
 import com.bloodbank.service.BloodInventoryService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +18,7 @@ import static com.bloodbank.entity.User.BloodType;
 @RequestMapping("/inventory")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@Slf4j
 public class BloodInventoryController {
     
     private final BloodInventoryService bloodInventoryService;
@@ -51,6 +55,10 @@ public class BloodInventoryController {
     @PostMapping("/add")
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'NURSE')")
     public ResponseEntity<BloodInventory> addBloodUnit(@RequestBody BloodInventory bloodInventory) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        log.debug("Adding blood unit. User: {}, Authorities: {}, Principal: {}", 
+                 auth.getName(), auth.getAuthorities(), auth.getPrincipal());
+        
         BloodInventory saved = bloodInventoryService.addBloodUnit(bloodInventory);
         return ResponseEntity.ok(saved);
     }
@@ -58,6 +66,10 @@ public class BloodInventoryController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'NURSE')")
     public ResponseEntity<BloodInventory> updateBloodUnit(@PathVariable Long id, @RequestBody BloodInventory bloodInventoryDetails) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        log.debug("Updating blood unit. User: {}, Authorities: {}, Principal: {}", 
+                 auth.getName(), auth.getAuthorities(), auth.getPrincipal());
+        
         BloodInventory updated = bloodInventoryService.updateBloodUnit(id, bloodInventoryDetails);
         return ResponseEntity.ok(updated);
     }

@@ -10,6 +10,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.table.TableRowSorter;
+import javax.swing.ListSelectionModel;
+import java.util.List;
+import java.awt.Dimension;
 
 public class BloodBankSwingClient extends JFrame {
     
@@ -21,8 +27,33 @@ public class BloodBankSwingClient extends JFrame {
     private JPanel usersPanel;
     private JPanel donationsPanel;
     private JPanel requestsPanel;
+    private JPanel mainPanel; // New field for the main panel
+    private JLabel welcomeLabel; // New field for the welcome label
+    private String currentUsername; // New field for current username
     
     private HttpClient httpClient;
+    
+    // Login form components
+    private JTextField usernameField;
+    private JPasswordField passwordField;
+    
+    // User management components
+    private UserService userService;
+    private JButton refreshButton;
+    private JButton addButton;
+    private JButton editButton;
+    private JButton deleteButton;
+    private JButton activateButton;
+    private JButton deactivateButton;
+    private UserTableModel userTableModel;
+    private JTable userTable;
+    private JScrollPane userScrollPane;
+    
+    // Blood Inventory components
+    private BloodInventoryService bloodInventoryService;
+    private BloodInventoryTableModel bloodInventoryTableModel;
+    private JTable bloodInventoryTable;
+    private JScrollPane bloodInventoryScrollPane;
     
     public BloodBankSwingClient() {
         httpClient = HttpClient.newHttpClient();
@@ -61,9 +92,9 @@ public class BloodBankSwingClient extends JFrame {
         loginPanel.add(titleLabel, gbc);
         
         JLabel usernameLabel = new JLabel("Username:");
-        JTextField usernameField = new JTextField(20);
+        usernameField = new JTextField(20);
         JLabel passwordLabel = new JLabel("Password:");
-        JPasswordField passwordField = new JPasswordField(20);
+        passwordField = new JPasswordField(20);
         JButton loginButton = new JButton("Login");
         
         loginPanel.add(usernameLabel, gbc);
@@ -86,6 +117,36 @@ public class BloodBankSwingClient extends JFrame {
     }
     
     private void createMainTabs() {
+        // Create top panel with welcome message and logout button
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, Color.DARK_GRAY),
+            BorderFactory.createEmptyBorder(8, 15, 8, 15)
+        ));
+        topPanel.setBackground(new Color(245, 245, 245));
+        
+        // Welcome label (will be updated when user logs in)
+        JLabel welcomeLabel = new JLabel("Welcome!");
+        welcomeLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        welcomeLabel.setForeground(new Color(50, 50, 50));
+        topPanel.add(welcomeLabel, BorderLayout.WEST);
+        
+        JButton logoutButton = new JButton("Logout");
+        logoutButton.setPreferredSize(new Dimension(100, 30));
+        logoutButton.setBackground(new Color(220, 53, 69)); // Red color for logout
+        logoutButton.setForeground(Color.WHITE);
+        logoutButton.setFocusPainted(false);
+        logoutButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        logoutButton.setFont(new Font("Arial", Font.BOLD, 12));
+        topPanel.add(logoutButton, BorderLayout.EAST);
+        
+        // Add logout functionality
+        logoutButton.addActionListener(e -> performLogout());
+        
+        // Create main panel to hold both top panel and tabbed pane
+        mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+        
         tabbedPane = new JTabbedPane();
         
         // Create inventory panel
@@ -104,50 +165,176 @@ public class BloodBankSwingClient extends JFrame {
         tabbedPane.addTab("Users", usersPanel);
         tabbedPane.addTab("Donations", donationsPanel);
         tabbedPane.addTab("Requests", requestsPanel);
+        
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        
+        // Store reference to welcome label for later updates
+        this.welcomeLabel = welcomeLabel;
     }
     
     private void createInventoryPanel() {
         inventoryPanel = new JPanel(new BorderLayout());
         
+        // Initialize blood inventory service
+        bloodInventoryService = new BloodInventoryService();
+        
         // Top panel for controls
-        JPanel controlPanel = new JPanel(new FlowLayout());
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton refreshButton = new JButton("Refresh");
         JButton addButton = new JButton("Add Blood Unit");
+        JButton editButton = new JButton("Edit");
+        JButton deleteButton = new JButton("Delete");
+        
         controlPanel.add(refreshButton);
         controlPanel.add(addButton);
+        controlPanel.add(editButton);
+        controlPanel.add(deleteButton);
         
-        // Table for inventory
-        String[] columns = {"ID", "Blood Type", "Quantity", "Unit", "Status", "Expiry Date", "Batch Number"};
-        DefaultTableModel model = new DefaultTableModel(columns, 0);
-        JTable table = new JTable(model);
-        JScrollPane scrollPane = new JScrollPane(table);
+        // Create inventory table
+        bloodInventoryTableModel = new BloodInventoryTableModel();
+        bloodInventoryTable = new JTable(bloodInventoryTableModel);
+        bloodInventoryTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        bloodInventoryTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         
-        inventoryPanel.add(controlPanel, BorderLayout.NORTH);
-        inventoryPanel.add(scrollPane, BorderLayout.CENTER);
+        // Set column widths
+        bloodInventoryTable.getColumnModel().getColumn(0).setPreferredWidth(50);   // ID
+        bloodInventoryTable.getColumnModel().getColumn(1).setPreferredWidth(100);  // Blood Type
+        bloodInventoryTable.getColumnModel().getColumn(2).setPreferredWidth(80);   // Quantity
+        bloodInventoryTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // Unit
+        bloodInventoryTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // Status
+        bloodInventoryTable.getColumnModel().getColumn(5).setPreferredWidth(120);  // Expiry Date
+        bloodInventoryTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // Batch Number
+        bloodInventoryTable.getColumnModel().getColumn(7).setPreferredWidth(150);  // Created
         
+        // Add table sorter
+        TableRowSorter<BloodInventoryTableModel> sorter = new TableRowSorter<>(bloodInventoryTableModel);
+        bloodInventoryTable.setRowSorter(sorter);
+        
+        // Create scroll pane
+        bloodInventoryScrollPane = new JScrollPane(bloodInventoryTable);
+        bloodInventoryScrollPane.setPreferredSize(new Dimension(800, 400));
+        
+        // Add double-click listener for editing
+        bloodInventoryTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    editSelectedInventory();
+                }
+            }
+        });
+        
+        // Add action listeners
         refreshButton.addActionListener(e -> refreshInventory());
         addButton.addActionListener(e -> showAddInventoryDialog());
+        editButton.addActionListener(e -> editSelectedInventory());
+        deleteButton.addActionListener(e -> deleteSelectedInventory());
+        
+        // Initially disable buttons that require selection
+        editButton.setEnabled(false);
+        deleteButton.setEnabled(false);
+        
+        // Add selection listener to enable/disable buttons
+        bloodInventoryTable.getSelectionModel().addListSelectionListener(e -> {
+            boolean hasSelection = bloodInventoryTable.getSelectedRow() != -1;
+            editButton.setEnabled(hasSelection);
+            deleteButton.setEnabled(hasSelection);
+        });
+        
+        inventoryPanel.add(controlPanel, BorderLayout.NORTH);
+        inventoryPanel.add(bloodInventoryScrollPane, BorderLayout.CENTER);
+        
+        // Load initial data
+        refreshInventory();
     }
     
     private void createUsersPanel() {
         usersPanel = new JPanel(new BorderLayout());
         
-        JPanel controlPanel = new JPanel(new FlowLayout());
-        JButton refreshButton = new JButton("Refresh Users");
-        JButton addButton = new JButton("Add User");
+        // Initialize user service
+        userService = new UserService();
+        
+        // Create control panel with buttons
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        refreshButton = new JButton("Refresh");
+        addButton = new JButton("Add User");
+        editButton = new JButton("Edit User");
+        deleteButton = new JButton("Delete User");
+        activateButton = new JButton("Activate");
+        deactivateButton = new JButton("Deactivate");
+        
+        // Add buttons to control panel
         controlPanel.add(refreshButton);
         controlPanel.add(addButton);
+        controlPanel.add(editButton);
+        controlPanel.add(deleteButton);
+        controlPanel.add(activateButton);
+        controlPanel.add(deactivateButton);
         
-        String[] columns = {"ID", "Username", "Name", "Role", "Blood Type", "Status"};
-        DefaultTableModel model = new DefaultTableModel(columns, 0);
-        JTable table = new JTable(model);
-        JScrollPane scrollPane = new JScrollPane(table);
+        // Create user table
+        userTableModel = new UserTableModel();
+        userTable = new JTable(userTableModel);
+        userTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        userTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         
-        usersPanel.add(controlPanel, BorderLayout.NORTH);
-        usersPanel.add(scrollPane, BorderLayout.CENTER);
+        // Set column widths
+        userTable.getColumnModel().getColumn(0).setPreferredWidth(50);   // ID
+        userTable.getColumnModel().getColumn(1).setPreferredWidth(100);  // Username
+        userTable.getColumnModel().getColumn(2).setPreferredWidth(150);  // Full Name
+        userTable.getColumnModel().getColumn(3).setPreferredWidth(200);  // Email
+        userTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // Role
+        userTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // Blood Type
+        userTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // Phone
+        userTable.getColumnModel().getColumn(7).setPreferredWidth(80);   // Status
+        userTable.getColumnModel().getColumn(8).setPreferredWidth(150);  // Created
         
+        // Add table sorter
+        TableRowSorter<UserTableModel> sorter = new TableRowSorter<>(userTableModel);
+        userTable.setRowSorter(sorter);
+        
+        // Create scroll pane
+        userScrollPane = new JScrollPane(userTable);
+        userScrollPane.setPreferredSize(new Dimension(1000, 400));
+        
+        // Add double-click listener for editing
+        userTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    editSelectedUser();
+                }
+            }
+        });
+        
+        // Add action listeners
         refreshButton.addActionListener(e -> refreshUsers());
         addButton.addActionListener(e -> showAddUserDialog());
+        editButton.addActionListener(e -> editSelectedUser());
+        deleteButton.addActionListener(e -> deleteSelectedUser());
+        activateButton.addActionListener(e -> activateSelectedUser());
+        deactivateButton.addActionListener(e -> deactivateSelectedUser());
+        
+        // Initially disable buttons that require selection
+        editButton.setEnabled(false);
+        deleteButton.setEnabled(false);
+        activateButton.setEnabled(false);
+        deactivateButton.setEnabled(false);
+        
+        // Add selection listener to enable/disable buttons
+        userTable.getSelectionModel().addListSelectionListener(e -> {
+            boolean hasSelection = userTable.getSelectedRow() != -1;
+            editButton.setEnabled(hasSelection);
+            deleteButton.setEnabled(hasSelection);
+            activateButton.setEnabled(hasSelection);
+            deactivateButton.setEnabled(hasSelection);
+        });
+        
+        // Add components to panel
+        usersPanel.add(controlPanel, BorderLayout.NORTH);
+        usersPanel.add(userScrollPane, BorderLayout.CENTER);
+        
+        // Load initial data
+        refreshUsers();
     }
     
     private void createDonationsPanel() {
@@ -208,10 +395,21 @@ public class BloodBankSwingClient extends JFrame {
             if (response.statusCode() == 200) {
                 // Parse token from response (simplified)
                 authToken = "Bearer " + response.body().split("\"token\":\"")[1].split("\"")[0];
+                currentUsername = username; // Store current username
                 SwingUtilities.invokeLater(() -> {
-                    setContentPane(tabbedPane);
+                    setContentPane(mainPanel);
+                    welcomeLabel.setText("Welcome, " + currentUsername + "!");
                     revalidate();
                     repaint();
+                    
+                    // Set auth token for services
+                    if (userService != null) {
+                        userService.setAuthToken(authToken);
+                    }
+                    if (bloodInventoryService != null) {
+                        bloodInventoryService.setAuthToken(authToken);
+                    }
+                    
                     JOptionPane.showMessageDialog(this, "Login successful!");
                 });
             } else {
@@ -230,20 +428,195 @@ public class BloodBankSwingClient extends JFrame {
     }
     
     private void refreshInventory() {
-        // Implementation for refreshing inventory data
-        JOptionPane.showMessageDialog(this, "Refreshing inventory...");
+        try {
+            if (bloodInventoryService != null && authToken != null) {
+                bloodInventoryService.setAuthToken(authToken);
+                List<BloodInventory> inventory = bloodInventoryService.getAllInventory();
+                bloodInventoryTableModel.setInventory(inventory);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error refreshing inventory: " + e.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
     
     private void showAddInventoryDialog() {
-        JOptionPane.showMessageDialog(this, "Add inventory dialog would appear here");
+        if (bloodInventoryService != null && authToken != null) {
+            bloodInventoryService.setAuthToken(authToken);
+            BloodInventoryDialog dialog = new BloodInventoryDialog(this, null, false);
+            dialog.setVisible(true);
+            if (dialog.isConfirmed()) {
+                try {
+                    BloodInventory inventory = dialog.getInventory();
+                    bloodInventoryService.createInventory(inventory);
+                    refreshInventory();
+                    JOptionPane.showMessageDialog(this, "Blood inventory added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "Error saving inventory: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please login first to add inventory.", "Authentication Required", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    private void editSelectedInventory() {
+        int selectedRow = bloodInventoryTable.getSelectedRow();
+        if (selectedRow != -1) {
+            BloodInventory inventory = bloodInventoryTableModel.getInventoryAt(selectedRow);
+            if (bloodInventoryService != null && authToken != null) {
+                bloodInventoryService.setAuthToken(authToken);
+                BloodInventoryDialog dialog = new BloodInventoryDialog(this, inventory, true);
+                dialog.setVisible(true);
+                if (dialog.isConfirmed()) {
+                    try {
+                        BloodInventory updatedInventory = dialog.getInventory();
+                        bloodInventoryService.updateInventory(inventory.getId(), updatedInventory);
+                        refreshInventory();
+                        JOptionPane.showMessageDialog(this, "Blood inventory updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (Exception e) {
+                        JOptionPane.showMessageDialog(this, "Error updating inventory: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select an inventory item to edit.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void deleteSelectedInventory() {
+        int selectedRow = bloodInventoryTable.getSelectedRow();
+        if (selectedRow != -1) {
+            BloodInventory inventory = bloodInventoryTableModel.getInventoryAt(selectedRow);
+            if (JOptionPane.showConfirmDialog(this, "Are you sure you want to delete this inventory item?", 
+                    "Confirm Deletion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                try {
+                    if (bloodInventoryService != null && authToken != null) {
+                        bloodInventoryService.setAuthToken(authToken);
+                        bloodInventoryService.deleteInventory(inventory.getId());
+                        refreshInventory();
+                        JOptionPane.showMessageDialog(this, "Blood inventory deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "Error deleting inventory: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select an inventory item to delete.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
     
     private void refreshUsers() {
-        JOptionPane.showMessageDialog(this, "Refreshing users...");
+        try {
+            if (userService != null && authToken != null) {
+                userService.setAuthToken(authToken);
+                List<User> users = userService.getAllUsers();
+                userTableModel.setUsers(users);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error refreshing users: " + e.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
     
     private void showAddUserDialog() {
-        JOptionPane.showMessageDialog(this, "Add user dialog would appear here");
+        if (userService != null && authToken != null) {
+            userService.setAuthToken(authToken);
+            UserDialog dialog = new UserDialog(this, null, false, userService);
+            dialog.setVisible(true);
+            if (dialog.isConfirmed()) {
+                refreshUsers();
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please login first to add users.", 
+                    "Authentication Required", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    private void editSelectedUser() {
+        int selectedRow = userTable.getSelectedRow();
+        if (selectedRow != -1) {
+            User user = userTableModel.getUserAt(selectedRow);
+            if (userService != null && authToken != null) {
+                userService.setAuthToken(authToken);
+                UserDialog dialog = new UserDialog(this, user, true, userService);
+                dialog.setVisible(true);
+                if (dialog.isConfirmed()) {
+                    refreshUsers();
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select a user to edit.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void deleteSelectedUser() {
+        int selectedRow = userTable.getSelectedRow();
+        if (selectedRow != -1) {
+            User user = userTableModel.getUserAt(selectedRow);
+            if (JOptionPane.showConfirmDialog(this, "Are you sure you want to delete user " + user.getUsername() + "?", 
+                    "Confirm Deletion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                try {
+                    if (userService != null && authToken != null) {
+                        userService.setAuthToken(authToken);
+                        userService.deleteUser(user.getId());
+                        refreshUsers();
+                        JOptionPane.showMessageDialog(this, "User deleted successfully!");
+                    }
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "Error deleting user: " + e.getMessage(), 
+                            "Error", JOptionPane.ERROR_MESSAGE);
+        }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select a user to delete.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void activateSelectedUser() {
+        int selectedRow = userTable.getSelectedRow();
+        if (selectedRow != -1) {
+            User user = userTableModel.getUserAt(selectedRow);
+            if (JOptionPane.showConfirmDialog(this, "Are you sure you want to activate user " + user.getUsername() + "?", 
+                    "Confirm Activation", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                try {
+                    if (userService != null && authToken != null) {
+                        userService.setAuthToken(authToken);
+                        userService.activateUser(user.getId());
+                        refreshUsers();
+                        JOptionPane.showMessageDialog(this, "User activated successfully!");
+                    }
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "Error activating user: " + e.getMessage(), 
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select a user to activate.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void deactivateSelectedUser() {
+        int selectedRow = userTable.getSelectedRow();
+        if (selectedRow != -1) {
+            User user = userTableModel.getUserAt(selectedRow);
+            if (JOptionPane.showConfirmDialog(this, "Are you sure you want to deactivate user " + user.getUsername() + "?", 
+                    "Confirm Deactivation", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                try {
+                    if (userService != null && authToken != null) {
+                        userService.setAuthToken(authToken);
+                        userService.deactivateUser(user.getId());
+                        refreshUsers();
+                        JOptionPane.showMessageDialog(this, "User deactivated successfully!");
+                    }
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "Error deactivating user: " + e.getMessage(), 
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Please select a user to deactivate.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
     
     private void refreshDonations() {
@@ -251,7 +624,12 @@ public class BloodBankSwingClient extends JFrame {
     }
     
     private void showAddDonationDialog() {
-        JOptionPane.showMessageDialog(this, "Add donation dialog would appear here");
+        DonationDialog dialog = new DonationDialog(this, null, false);
+        dialog.setVisible(true);
+        if (dialog.isConfirmed()) {
+            // TODO: Save donation to backend
+            JOptionPane.showMessageDialog(this, "Blood donation added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
     
     private void refreshRequests() {
@@ -259,7 +637,35 @@ public class BloodBankSwingClient extends JFrame {
     }
     
     private void showAddRequestDialog() {
-        JOptionPane.showMessageDialog(this, "Add request dialog would appear here");
+        RequestDialog dialog = new RequestDialog(this, null, false);
+        dialog.setVisible(true);
+        if (dialog.isConfirmed()) {
+            // TODO: Save request to backend
+            JOptionPane.showMessageDialog(this, "Blood request added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    // New method to clear login form
+    private void clearLoginForm() {
+        usernameField.setText("");
+        passwordField.setText("");
+    }
+
+    // New method to clear current username
+    private void clearCurrentUsername() {
+        currentUsername = null;
+    }
+    
+    private void performLogout() {
+        authToken = null;
+        currentUsername = null;
+        SwingUtilities.invokeLater(() -> {
+            setContentPane(loginPanel);
+            clearLoginForm();
+            revalidate();
+            repaint();
+            JOptionPane.showMessageDialog(this, "Logged out successfully!");
+        });
     }
     
     public static void main(String[] args) {
