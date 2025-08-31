@@ -1,0 +1,375 @@
+@startuml Blood Bank Management System - Blood Request Sequence
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2E7D32
+    LifeLineBorderColor #2E7D32
+    ParticipantBorderColor #2E7D32
+    ParticipantBackgroundColor #E8F5E8
+}
+
+title Blood Bank Management System - Blood Request Management Sequence
+
+actor "Patient/Staff" as REQUESTER
+participant "Swing Client" as CLIENT
+participant "RequestController" as REQUEST_CONTROLLER
+participant "RequestService" as REQUEST_SERVICE
+participant "BloodInventoryService" as INVENTORY_SERVICE
+participant "UserService" as USER_SERVICE
+participant "RequestRepository" as REQUEST_REPO
+participant "BloodInventoryRepository" as INVENTORY_REPO
+participant "UserRepository" as USER_REPO
+database "PostgreSQL" as DB
+
+== Submit Blood Request ==
+
+REQUESTER -> CLIENT: Open Request Dialog
+activate CLIENT
+
+CLIENT -> CLIENT: Load requester info
+note right: Get current user details\nExtract role and permissions
+
+CLIENT -> REQUESTER: Display request form
+note right: Hospital name\nPatient name\nBlood type\nQuantity\nPriority\nRequired date
+
+REQUESTER -> CLIENT: Fill request details
+note right: Enter hospital info\nSpecify patient details\nChoose blood type\nSet quantity and priority
+
+CLIENT -> CLIENT: Validate request data
+note right: Check required fields\nValidate blood type\nVerify quantity > 0\nEnsure required_date >= today
+
+CLIENT -> REQUEST_CONTROLLER: POST /api/requests
+activate REQUEST_CONTROLLER
+note right: JSON: {hospitalName, patientName, bloodType,\nquantity, priority, requiredDate, reason}
+
+REQUEST_CONTROLLER -> REQUEST_CONTROLLER: Validate JWT token
+note right: Extract user info\nCheck permissions
+
+REQUEST_CONTROLLER -> REQUEST_SERVICE: createRequest(requestRequest)
+activate REQUEST_SERVICE
+
+REQUEST_SERVICE -> USER_SERVICE: findById(requesterId)
+activate USER_SERVICE
+
+USER_SERVICE -> USER_REPO: findById(requesterId)
+activate USER_REPO
+
+USER_REPO -> DB: SELECT * FROM users WHERE id = ?
+activate DB
+DB --> USER_REPO: User data
+deactivate DB
+
+USER_REPO --> USER_SERVICE: User entity
+deactivate USER_REPO
+
+USER_SERVICE --> REQUEST_SERVICE: User entity
+deactivate USER_SERVICE
+
+REQUEST_SERVICE -> REQUEST_SERVICE: Set request status
+note right: status = 'PENDING'\nrequestDate = CURRENT_TIMESTAMP
+
+REQUEST_SERVICE -> REQUEST_SERVICE: Validate business rules
+note right: Check if requester can make requests\nVerify blood type is valid
+
+REQUEST_SERVICE -> REQUEST_REPO: save(request)
+activate REQUEST_REPO
+
+REQUEST_REPO -> DB: INSERT INTO requests (...)
+activate DB
+DB --> REQUEST_REPO: Generated ID
+deactivate DB
+
+REQUEST_REPO --> REQUEST_SERVICE: Saved request
+deactivate REQUEST_REPO
+
+REQUEST_SERVICE --> REQUEST_CONTROLLER: RequestResponse
+deactivate REQUEST_SERVICE
+
+REQUEST_CONTROLLER -> REQUEST_CONTROLLER: Set response headers
+note right: Content-Type: application/json
+
+REQUEST_CONTROLLER --> CLIENT: HTTP 201 + Request data
+deactivate REQUEST_CONTROLLER
+
+CLIENT -> CLIENT: Update request list
+note right: Refresh request table\nAdd new request
+
+CLIENT --> REQUESTER: Display success message
+note right: "Blood request submitted successfully!\nRequest ID: [id]"
+
+deactivate CLIENT
+
+== Process Blood Request (Staff) ==
+
+REQUESTER -> CLIENT: View pending requests
+activate CLIENT
+
+CLIENT -> REQUEST_CONTROLLER: GET /api/requests?status=PENDING
+activate REQUEST_CONTROLLER
+
+REQUEST_CONTROLLER -> REQUEST_CONTROLLER: Validate JWT token
+note right: Check STAFF/ADMIN role
+
+REQUEST_CONTROLLER -> REQUEST_SERVICE: getRequestsByStatus('PENDING')
+activate REQUEST_SERVICE
+
+REQUEST_SERVICE -> REQUEST_REPO: findByStatus('PENDING')
+activate REQUEST_REPO
+
+REQUEST_REPO -> DB: SELECT * FROM requests WHERE status = 'PENDING' ORDER BY priority DESC, required_date ASC
+activate DB
+DB --> REQUEST_REPO: Pending requests
+deactivate DB
+
+REQUEST_REPO --> REQUEST_SERVICE: List of pending requests
+deactivate REQUEST_REPO
+
+REQUEST_SERVICE --> REQUEST_CONTROLLER: List<Request>
+deactivate REQUEST_SERVICE
+
+REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Pending requests
+deactivate REQUEST_CONTROLLER
+
+CLIENT -> CLIENT: Display pending requests
+note right: Show in priority order\nHighlight urgent requests
+
+CLIENT --> REQUESTER: List of pending requests
+note right: Hospital, patient, blood type\nPriority, required date
+
+REQUESTER -> CLIENT: Select request to process
+note right: Choose from pending list
+
+CLIENT -> REQUEST_CONTROLLER: GET /api/requests/{id}
+activate REQUEST_CONTROLLER
+
+REQUEST_CONTROLLER -> REQUEST_SERVICE: getRequestById(id)
+activate REQUEST_SERVICE
+
+REQUEST_SERVICE -> REQUEST_REPO: findById(id)
+activate REQUEST_REPO
+
+REQUEST_REPO -> DB: SELECT * FROM requests WHERE id = ?
+activate DB
+DB --> REQUEST_REPO: Request data
+deactivate DB
+
+REQUEST_REPO --> REQUEST_SERVICE: Request entity
+deactivate REQUEST_REPO
+
+REQUEST_SERVICE --> REQUEST_CONTROLLER: Request details
+deactivate REQUEST_SERVICE
+
+REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Request details
+deactivate REQUEST_CONTROLLER
+
+CLIENT -> CLIENT: Show request details
+note right: Display full request information
+
+REQUESTER -> CLIENT: Choose action (Approve/Reject)
+note right: Select approve or reject
+
+alt Approve Request
+    CLIENT -> REQUEST_CONTROLLER: PUT /api/requests/{id}/approve
+    activate REQUEST_CONTROLLER
+    
+    REQUEST_CONTROLLER -> REQUEST_SERVICE: approveRequest(id)
+    activate REQUEST_SERVICE
+    
+    REQUEST_SERVICE -> REQUEST_SERVICE: Check blood availability
+    note right: Verify sufficient stock\nCheck expiry dates
+    
+    REQUEST_SERVICE -> INVENTORY_SERVICE: checkAvailability(bloodType, quantity)
+    activate INVENTORY_SERVICE
+    
+    INVENTORY_SERVICE -> INVENTORY_REPO: findByBloodTypeAndStatus(bloodType, 'AVAILABLE')
+    activate INVENTORY_REPO
+    
+    INVENTORY_REPO -> DB: SELECT * FROM blood_inventory WHERE blood_type = ? AND status = 'AVAILABLE' ORDER BY expiry_date ASC
+    activate DB
+    DB --> INVENTORY_REPO: Available inventory
+    deactivate DB
+    
+    INVENTORY_REPO --> INVENTORY_SERVICE: List of available blood
+    deactivate INVENTORY_REPO
+    
+    INVENTORY_SERVICE -> INVENTORY_SERVICE: Calculate total available
+    note right: Sum quantities\nCheck if sufficient
+    
+    alt Sufficient blood available
+        INVENTORY_SERVICE -> INVENTORY_SERVICE: Reserve blood for request
+        note right: Mark as RESERVED\nLink to request ID
+        
+        INVENTORY_SERVICE -> INVENTORY_REPO: updateStatus(batchNumbers, 'RESERVED')
+        activate INVENTORY_REPO
+        
+        INVENTORY_REPO -> DB: UPDATE blood_inventory SET status = 'RESERVED' WHERE batch_number IN (...)
+        activate DB
+        DB --> INVENTORY_REPO: Updated rows
+        deactivate DB
+        
+        INVENTORY_REPO --> INVENTORY_SERVICE: Inventory reserved
+        deactivate INVENTORY_REPO
+        
+        INVENTORY_SERVICE --> REQUEST_SERVICE: Blood reserved successfully
+        deactivate INVENTORY_SERVICE
+        
+        REQUEST_SERVICE -> REQUEST_SERVICE: Update request status
+        note right: status = 'APPROVED'\napprovedAt = CURRENT_TIMESTAMP
+        
+        REQUEST_SERVICE -> REQUEST_REPO: update(request)
+        activate REQUEST_REPO
+        
+        REQUEST_REPO -> DB: UPDATE requests SET status = 'APPROVED', approved_at = ? WHERE id = ?
+        activate DB
+        DB --> REQUEST_REPO: Updated rows
+        deactivate DB
+        
+        REQUEST_REPO --> REQUEST_SERVICE: Updated request
+        deactivate REQUEST_REPO
+        
+        REQUEST_SERVICE --> REQUEST_CONTROLLER: Request approved
+        deactivate REQUEST_SERVICE
+        
+        REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Approved request
+        deactivate REQUEST_CONTROLLER
+        
+        CLIENT -> CLIENT: Update request status
+        note right: Show as APPROVED
+        
+        CLIENT -> CLIENT: Update inventory display
+        note right: Show reserved blood
+        
+        CLIENT --> REQUESTER: Success message
+        note right: "Request approved!\nBlood reserved for [patientName]"
+        
+    else Insufficient blood available
+        INVENTORY_SERVICE --> REQUEST_SERVICE: Insufficient blood
+        deactivate INVENTORY_SERVICE
+        
+        REQUEST_SERVICE -> REQUEST_SERVICE: Reject request
+        note right: status = 'REJECTED'\nreason = 'Insufficient blood available'
+        
+        REQUEST_SERVICE -> REQUEST_REPO: update(request)
+        activate REQUEST_REPO
+        
+        REQUEST_REPO -> DB: UPDATE requests SET status = 'REJECTED', reason = ? WHERE id = ?
+        activate DB
+        DB --> REQUEST_REPO: Updated rows
+        deactivate DB
+        
+        REQUEST_REPO --> REQUEST_SERVICE: Updated request
+        deactivate REQUEST_REPO
+        
+        REQUEST_SERVICE --> REQUEST_CONTROLLER: Request rejected
+        deactivate REQUEST_SERVICE
+        
+        REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Rejected request
+        deactivate REQUEST_CONTROLLER
+        
+        CLIENT -> CLIENT: Update request status
+        note right: Show as REJECTED
+        
+        CLIENT --> REQUESTER: Rejection message
+        note right: "Request rejected:\nInsufficient blood available"
+    end
+    
+else Reject Request
+    REQUESTER -> CLIENT: Enter rejection reason
+    note right: Provide reason for rejection
+    
+    CLIENT -> REQUEST_CONTROLLER: PUT /api/requests/{id}/reject
+    activate REQUEST_CONTROLLER
+    note right: JSON: {reason: "rejection reason"}
+    
+    REQUEST_CONTROLLER -> REQUEST_SERVICE: rejectRequest(id, reason)
+    activate REQUEST_SERVICE
+    
+    REQUEST_SERVICE -> REQUEST_SERVICE: Update request status
+    note right: status = 'REJECTED'\nrejectedAt = CURRENT_TIMESTAMP
+    
+    REQUEST_SERVICE -> REQUEST_REPO: update(request)
+    activate REQUEST_REPO
+    
+    REQUEST_REPO -> DB: UPDATE requests SET status = 'REJECTED', reason = ?, rejected_at = ? WHERE id = ?
+    activate DB
+    DB --> REQUEST_REPO: Updated rows
+    deactivate DB
+    
+    REQUEST_REPO --> REQUEST_SERVICE: Updated request
+    deactivate REQUEST_REPO
+    
+    REQUEST_SERVICE --> REQUEST_CONTROLLER: Request rejected
+    deactivate REQUEST_SERVICE
+    
+    REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Rejected request
+    deactivate REQUEST_CONTROLLER
+    
+    CLIENT -> CLIENT: Update request status
+    note right: Show as REJECTED
+    
+    CLIENT --> REQUESTER: Rejection message
+    note right: "Request rejected successfully"
+end
+
+deactivate CLIENT
+
+== Fulfill Blood Request ==
+
+REQUESTER -> CLIENT: Process approved request
+activate CLIENT
+
+CLIENT -> REQUEST_CONTROLLER: PUT /api/requests/{id}/fulfill
+activate REQUEST_CONTROLLER
+
+REQUEST_CONTROLLER -> REQUEST_SERVICE: fulfillRequest(id)
+activate REQUEST_SERVICE
+
+REQUEST_SERVICE -> REQUEST_SERVICE: Update request status
+note right: status = 'FULFILLED'\nfulfilledAt = CURRENT_TIMESTAMP
+
+REQUEST_SERVICE -> REQUEST_REPO: update(request)
+activate REQUEST_REPO
+
+REQUEST_REPO -> DB: UPDATE requests SET status = 'FULFILLED', fulfilled_at = ? WHERE id = ?
+activate DB
+DB --> REQUEST_REPO: Updated rows
+deactivate DB
+
+REQUEST_REPO --> REQUEST_SERVICE: Updated request
+deactivate REQUEST_REPO
+
+REQUEST_SERVICE -> INVENTORY_SERVICE: removeReservedBlood(requestId)
+activate INVENTORY_SERVICE
+
+INVENTORY_SERVICE -> INVENTORY_REPO: deleteByRequestId(requestId)
+activate INVENTORY_REPO
+
+INVENTORY_REPO -> DB: DELETE FROM blood_inventory WHERE request_id = ?
+activate DB
+DB --> INVENTORY_REPO: Deleted rows
+deactivate DB
+
+INVENTORY_REPO --> INVENTORY_SERVICE: Reserved blood removed
+deactivate INVENTORY_REPO
+
+INVENTORY_SERVICE --> REQUEST_SERVICE: Inventory updated
+deactivate INVENTORY_SERVICE
+
+REQUEST_SERVICE --> REQUEST_CONTROLLER: Request fulfilled
+deactivate REQUEST_SERVICE
+
+REQUEST_CONTROLLER --> CLIENT: HTTP 200 + Fulfilled request
+deactivate REQUEST_CONTROLLER
+
+CLIENT -> CLIENT: Update request status
+note right: Show as FULFILLED
+
+CLIENT -> CLIENT: Update inventory display
+note right: Remove fulfilled blood
+
+CLIENT --> REQUESTER: Success message
+note right: "Request fulfilled successfully!\nBlood delivered to [hospitalName]"
+
+deactivate CLIENT
+
+@enduml

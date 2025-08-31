@@ -1,0 +1,156 @@
+@startuml Blood Bank Management System - Login Sequence
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2E7D32
+    LifeLineBorderColor #2E7D32
+    ParticipantBorderColor #2E7D32
+    ParticipantBackgroundColor #E8F5E8
+}
+
+title Blood Bank Management System - Login & Authentication Sequence
+
+actor "User" as USER
+participant "Swing Client" as CLIENT
+participant "AuthController" as AUTH_CONTROLLER
+participant "AuthService" as AUTH_SERVICE
+participant "UserService" as USER_SERVICE
+participant "JwtService" as JWT_SERVICE
+participant "UserRepository" as USER_REPO
+database "PostgreSQL" as DB
+
+== Login Process ==
+
+USER -> CLIENT: Enter username & password
+activate CLIENT
+
+CLIENT -> CLIENT: Validate input fields
+note right: Check username length (3-50)\nCheck password length (>=6)
+
+CLIENT -> AUTH_CONTROLLER: POST /api/auth/login
+activate AUTH_CONTROLLER
+note right: JSON: {username, password}
+
+AUTH_CONTROLLER -> AUTH_SERVICE: authenticate(username, password)
+activate AUTH_SERVICE
+
+AUTH_SERVICE -> USER_SERVICE: findByUsername(username)
+activate USER_SERVICE
+
+USER_SERVICE -> USER_REPO: findByUsername(username)
+activate USER_REPO
+
+USER_REPO -> DB: SELECT * FROM users WHERE username = ?
+activate DB
+DB --> USER_REPO: User data or null
+deactivate DB
+
+alt User found
+    USER_REPO --> USER_SERVICE: User entity
+    deactivate USER_REPO
+    
+    USER_SERVICE -> USER_SERVICE: Check if user is active
+    note right: Verify isActive = true
+    
+    USER_SERVICE --> AUTH_SERVICE: User entity
+    deactivate USER_SERVICE
+    
+    AUTH_SERVICE -> AUTH_SERVICE: Verify password
+    note right: BCrypt password verification
+    
+    alt Password correct
+        AUTH_SERVICE -> JWT_SERVICE: generateToken(user)
+        activate JWT_SERVICE
+        
+        JWT_SERVICE -> JWT_SERVICE: Create JWT payload
+        note right: Include: username, role, userId
+        
+        JWT_SERVICE -> JWT_SERVICE: Sign with secret key
+        JWT_SERVICE --> AUTH_SERVICE: JWT token string
+        deactivate JWT_SERVICE
+        
+        AUTH_SERVICE -> AUTH_SERVICE: Create AuthResponse
+        AUTH_SERVICE --> AUTH_CONTROLLER: AuthResponse(token, message)
+        deactivate AUTH_SERVICE
+        
+        AUTH_CONTROLLER -> AUTH_CONTROLLER: Set response headers
+        note right: Content-Type: application/json
+        
+        AUTH_CONTROLLER --> CLIENT: HTTP 200 + JWT token
+        deactivate AUTH_CONTROLLER
+        
+        CLIENT -> CLIENT: Store JWT token
+        note right: Save in memory/session
+        
+        CLIENT -> CLIENT: Update UI for authenticated user
+        note right: Show main dashboard\nEnable role-based features
+        
+        CLIENT --> USER: Display success message
+        note right: "Login successful!\nWelcome, [username]"
+        
+    else Password incorrect
+        AUTH_SERVICE --> AUTH_CONTROLLER: AuthenticationException
+        deactivate AUTH_SERVICE
+        
+        AUTH_CONTROLLER --> CLIENT: HTTP 401 Unauthorized
+        deactivate AUTH_CONTROLLER
+        
+        CLIENT -> CLIENT: Show error message
+        CLIENT --> USER: Display error: "Invalid credentials"
+    end
+    
+else User not found
+    USER_REPO --> USER_SERVICE: null
+    deactivate USER_REPO
+    
+    USER_SERVICE --> AUTH_SERVICE: UserNotFoundException
+    deactivate USER_SERVICE
+    
+    AUTH_SERVICE --> AUTH_CONTROLLER: AuthenticationException
+    deactivate AUTH_SERVICE
+    
+    AUTH_CONTROLLER --> CLIENT: HTTP 401 Unauthorized
+    deactivate AUTH_CONTROLLER
+    
+    CLIENT -> CLIENT: Show error message
+    CLIENT --> USER: Display error: "User not found"
+end
+
+deactivate CLIENT
+
+== JWT Token Usage ==
+
+note over USER, DB: Subsequent API calls use JWT token
+
+USER -> CLIENT: Perform authenticated action
+activate CLIENT
+
+CLIENT -> CLIENT: Add JWT to Authorization header
+note right: Authorization: Bearer [JWT_TOKEN]
+
+CLIENT -> AUTH_CONTROLLER: API request with JWT
+activate AUTH_CONTROLLER
+
+AUTH_CONTROLLER -> AUTH_CONTROLLER: Validate JWT token
+note right: Extract and verify JWT\nCheck expiration\nValidate signature
+
+alt Valid JWT
+    AUTH_CONTROLLER -> AUTH_CONTROLLER: Process request
+    AUTH_CONTROLLER --> CLIENT: HTTP 200 + Response data
+    deactivate AUTH_CONTROLLER
+    
+    CLIENT -> CLIENT: Update UI with response
+    CLIENT --> USER: Show requested data
+    
+else Invalid JWT
+    AUTH_CONTROLLER --> CLIENT: HTTP 401 Unauthorized
+    deactivate AUTH_CONTROLLER
+    
+    CLIENT -> CLIENT: Clear stored JWT
+    CLIENT -> CLIENT: Redirect to login
+    CLIENT --> USER: Show login form
+end
+
+deactivate CLIENT
+
+@enduml

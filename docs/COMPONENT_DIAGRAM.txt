@@ -1,0 +1,89 @@
+================================================================================
+                    BLOOD BANK MANAGEMENT SYSTEM - COMPONENT DIAGRAM
+================================================================================
+
+                                    [Java Swing Client]
+                                           │
+                                           │ HTTP REST API
+                                           ▼
+                                    [Spring Boot App]
+                                           │
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+            [Controllers]            [Services]            [Security]
+                    │                      │                      │
+                    │                      │                      │
+            ┌───────┴───────┐      ┌───────┴───────┐      ┌───────┴───────┐
+            │                │      │                │      │                │
+            ▼                ▼      ▼                ▼      ▼                ▼
+    [AuthController]  [UserController]  [AuthService]  [UserService]  [SecurityConfig]  [JwtFilter]
+            │                │              │              │              │              │
+            │                │              │              │              │              │
+            └────────────────┼──────────────┼──────────────┼──────────────┼──────────────┘
+                             │              │              │              │
+                             ▼              ▼              ▼              ▼
+                    [Repositories]    [Entities]    [DTOs]        [JWT Service]
+                             │              │              │              │
+                             │              │              │              │
+                    ┌─────────┴─────────┐  │              │              │
+                    │                   │  │              │              │
+                    ▼                   ▼  ▼              ▼              ▼
+            [UserRepository]  [InventoryRepo]  [User]  [AuthRequest]  [JWT Tokens]
+                    │                   │      │      [UserRequest]        │
+                    │                   │      │      [PasswordRequest]   │
+                    └───────────────────┼──────┴──────────────────────────┘
+                                       │
+                                       ▼
+                              [PostgreSQL Database]
+                                       │
+                                       │
+                              ┌───────┴───────┐
+                              │               │
+                              ▼               ▼
+                        [users table]  [inventory table]
+                              │               │
+                              ▼               ▼
+                        [donations table]  [requests table]
+
+================================================================================
+                              KEY COMPONENTS
+================================================================================
+
+PRESENTATION TIER:
+• BloodBankSwingClient - Main application window
+• Dialog components for different operations
+• Table models for data display
+• Client-side services for API communication
+
+APPLICATION TIER:
+• Controllers - REST API endpoints
+• Services - Business logic implementation
+• Repositories - Data access layer
+• Security - JWT authentication & authorization
+• DTOs - Data transfer objects
+• Entities - Domain models
+
+DATA TIER:
+• PostgreSQL database with bloodbank schema
+• Tables: users, blood_inventory, donations, requests
+• Constraints, indexes, and audit fields
+
+COMMUNICATION:
+• HTTPS REST API on port 8080
+• JWT bearer tokens for authentication
+• JSON request/response format
+
+================================================================================
+                              DATA FLOW
+================================================================================
+
+1. User interacts with Swing client
+2. Client makes HTTP request to Spring Boot backend
+3. Request goes through JWT authentication filter
+4. Controller receives request and calls appropriate service
+5. Service performs business logic and calls repository
+6. Repository executes database operations via JPA
+7. Response flows back through the same layers
+8. Client receives response and updates UI

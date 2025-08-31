@@ -1,0 +1,153 @@
+@startuml Blood Bank Management System - System Architecture
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+
+title Blood Bank Management System - System Architecture
+
+' Define colors
+!define PRESENTATION_COLOR #E3F2FD
+!define APPLICATION_COLOR #F3E5F5
+!define DATA_COLOR #E8F5E8
+!define SECURITY_COLOR #FFF3E0
+
+' Presentation Tier (Client)
+package "Presentation Tier (Client)" as PRESENTATION {
+    component "Java Swing Client" as SWING_CLIENT {
+        component "BloodBankSwingClient" as MAIN_CLIENT
+        component "UserDialog" as USER_DIALOG
+        component "BloodInventoryDialog" as INVENTORY_DIALOG
+        component "DonationDialog" as DONATION_DIALOG
+        component "RequestDialog" as REQUEST_DIALOG
+        component "UserTableModel" as USER_TABLE_MODEL
+        component "BloodInventoryTableModel" as INVENTORY_TABLE_MODEL
+    }
+    
+    component "Client Services" as CLIENT_SERVICES {
+        component "UserService (Client)" as CLIENT_USER_SERVICE
+        component "BloodInventoryService (Client)" as CLIENT_INVENTORY_SERVICE
+    }
+}
+
+' Application Tier (Backend)
+package "Application Tier (Backend)" as APPLICATION {
+    component "Spring Boot Application" as SPRING_APP {
+        component "BloodBankApplication" as MAIN_APP
+    }
+    
+    component "Controllers (REST API)" as CONTROLLERS {
+        component "AuthController" as AUTH_CONTROLLER
+        component "UserController" as USER_CONTROLLER
+        component "BloodInventoryController" as INVENTORY_CONTROLLER
+        component "HealthController" as HEALTH_CONTROLLER
+    }
+    
+    component "Services (Business Logic)" as SERVICES {
+        component "AuthService" as AUTH_SERVICE
+        component "UserService" as USER_SERVICE
+        component "BloodInventoryService" as INVENTORY_SERVICE
+        component "JwtService" as JWT_SERVICE
+    }
+    
+    component "Repositories (Data Access)" as REPOSITORIES {
+        component "UserRepository" as USER_REPO
+        component "BloodInventoryRepository" as INVENTORY_REPO
+    }
+    
+    component "Security & Configuration" as SECURITY {
+        component "SecurityConfig" as SECURITY_CONFIG
+        component "JwtAuthenticationFilter" as JWT_FILTER
+    }
+    
+    component "DTOs (Data Transfer)" as DTOS {
+        component "AuthRequest/Response" as AUTH_DTO
+        component "UserRequest/Response" as USER_DTO
+        component "PasswordChangeRequest" as PASSWORD_DTO
+    }
+    
+    component "Entities (Domain Models)" as ENTITIES {
+        component "User" as USER_ENTITY
+        component "BloodInventory" as INVENTORY_ENTITY
+        component "Donation" as DONATION_ENTITY
+        component "Request" as REQUEST_ENTITY
+    }
+}
+
+' Data Tier (Database)
+package "Data Tier (Database)" as DATA {
+    database "PostgreSQL Database" as POSTGRES {
+        component "bloodbank Schema" as SCHEMA
+        component "Tables" as TABLES {
+            component "users" as USERS_TABLE
+            component "blood_inventory" as INVENTORY_TABLE
+            component "donations" as DONATIONS_TABLE
+            component "requests" as REQUESTS_TABLE
+        }
+        component "Constraints & Indexes" as CONSTRAINTS
+        component "Audit Fields" as AUDIT_FIELDS
+    }
+}
+
+' External Configuration
+component "External Configuration" as CONFIG {
+    file "application.properties" as APP_PROPERTIES
+    note right of APP_PROPERTIES
+        • Database Configuration
+        • JWT Settings
+        • Server Port (8080)
+        • Context Path (/api)
+        • Logging Configuration
+    end note
+}
+
+' Communication Layer
+package "Communication Layer" as COMM {
+    component "HTTPS REST API" as REST_API
+    component "JWT Bearer Tokens" as JWT_TOKENS
+    component "Port 8080" as PORT
+}
+
+' Relationships
+' Client to Backend
+SWING_CLIENT --> CLIENT_SERVICES : Uses
+CLIENT_SERVICES --> REST_API : HTTP Requests
+REST_API --> CONTROLLERS : Routes to
+
+' Backend Internal Flow
+CONTROLLERS --> SERVICES : Calls
+SERVICES --> REPOSITORIES : Uses
+REPOSITORIES --> POSTGRES : JDBC/JPA
+SERVICES --> ENTITIES : Manages
+SERVICES --> DTOS : Transforms
+
+' Security Flow
+AUTH_CONTROLLER --> AUTH_SERVICE : Authenticates
+AUTH_SERVICE --> JWT_SERVICE : Generates Tokens
+JWT_FILTER --> JWT_TOKENS : Validates
+SECURITY_CONFIG --> JWT_FILTER : Configures
+
+' Configuration
+SPRING_APP --> APP_PROPERTIES : Reads
+SPRING_APP --> SECURITY : Configures
+
+' Database Schema
+POSTGRES --> SCHEMA : Contains
+SCHEMA --> TABLES : Defines
+TABLES --> CONSTRAINTS : Enforces
+TABLES --> AUDIT_FIELDS : Tracks
+
+' Styling - Apply colors to packages
+skinparam package {
+    BackgroundColor<<PRESENTATION>> #E3F2FD
+    BackgroundColor<<APPLICATION>> #F3E5F5
+    BackgroundColor<<DATA>> #E8F5E8
+    BackgroundColor<<SECURITY>> #FFF3E0
+}
+
+' Apply package stereotypes for coloring
+PRESENTATION <<PRESENTATION>>
+APPLICATION <<APPLICATION>>
+DATA <<DATA>>
+SECURITY <<SECURITY>>
+
+@enduml

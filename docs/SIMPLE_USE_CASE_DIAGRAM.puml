@@ -1,0 +1,108 @@
+@startuml Blood Bank Management System - Simple Use Case Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    ArrowColor #2E7D32
+}
+
+title Blood Bank Management System - Core Use Cases
+
+' Define main actors
+actor "Admin" as ADMIN
+actor "Staff" as STAFF
+actor "Donor" as DONOR
+actor "Patient" as PATIENT
+
+' Define core use cases
+package "Authentication" {
+    usecase "Login" as UC_LOGIN
+    usecase "Logout" as UC_LOGOUT
+    usecase "Change Password" as UC_CHANGE_PASSWORD
+}
+
+package "User Management" {
+    usecase "Manage Users" as UC_MANAGE_USERS
+    usecase "View Profile" as UC_VIEW_PROFILE
+    usecase "Update Profile" as UC_UPDATE_PROFILE
+}
+
+package "Blood Inventory" {
+    usecase "View Inventory" as UC_VIEW_INVENTORY
+    usecase "Manage Stock" as UC_MANAGE_STOCK
+    usecase "Check Availability" as UC_CHECK_AVAILABILITY
+}
+
+package "Donations" {
+    usecase "Record Donation" as UC_RECORD_DONATION
+    usecase "View Donations" as UC_VIEW_DONATIONS
+    usecase "Schedule Donation" as UC_SCHEDULE_DONATION
+}
+
+package "Blood Requests" {
+    usecase "Submit Request" as UC_SUBMIT_REQUEST
+    usecase "Process Request" as UC_PROCESS_REQUEST
+    usecase "View Requests" as UC_VIEW_REQUESTS
+}
+
+package "Reports" {
+    usecase "Generate Reports" as UC_GENERATE_REPORTS
+    usecase "View Dashboard" as UC_VIEW_DASHBOARD
+}
+
+' Define relationships
+' Admin can do everything
+ADMIN --> UC_LOGIN
+ADMIN --> UC_LOGOUT
+ADMIN --> UC_MANAGE_USERS
+ADMIN --> UC_VIEW_DASHBOARD
+ADMIN --> UC_GENERATE_REPORTS
+
+' Staff can do most operations
+STAFF --> UC_LOGIN
+STAFF --> UC_LOGOUT
+STAFF --> UC_VIEW_INVENTORY
+STAFF --> UC_MANAGE_STOCK
+STAFF --> UC_RECORD_DONATION
+STAFF --> UC_VIEW_DONATIONS
+STAFF --> UC_PROCESS_REQUEST
+STAFF --> UC_VIEW_REQUESTS
+
+' Donors can manage their donations
+DONOR --> UC_LOGIN
+DONOR --> UC_LOGOUT
+DONOR --> UC_VIEW_PROFILE
+DONOR --> UC_UPDATE_PROFILE
+DONOR --> UC_SCHEDULE_DONATION
+DONOR --> UC_VIEW_DONATIONS
+
+' Patients can request blood
+PATIENT --> UC_LOGIN
+PATIENT --> UC_LOGOUT
+PATIENT --> UC_VIEW_PROFILE
+PATIENT --> UC_SUBMIT_REQUEST
+PATIENT --> UC_VIEW_REQUESTS
+PATIENT --> UC_CHECK_AVAILABILITY
+
+' Include relationships
+UC_VIEW_DASHBOARD ..> UC_VIEW_INVENTORY : <<include>>
+UC_VIEW_DASHBOARD ..> UC_VIEW_REQUESTS : <<include>>
+UC_VIEW_DASHBOARD ..> UC_VIEW_DONATIONS : <<include>>
+
+UC_PROCESS_REQUEST ..> UC_CHECK_AVAILABILITY : <<include>>
+UC_PROCESS_REQUEST ..> UC_MANAGE_STOCK : <<include>>
+
+' Notes
+note right of UC_LOGIN
+    JWT Authentication
+    Role-based Access
+end note
+
+note right of UC_VIEW_DASHBOARD
+    Real-time Statistics
+    Inventory Overview
+    Recent Activities
+end note
+
+@enduml

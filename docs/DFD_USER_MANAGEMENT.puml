@@ -1,0 +1,190 @@
+@startuml Blood Bank Management System - DFD User Management Process
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #FFF3E0
+    BorderColor #F57C00
+}
+
+title Blood Bank Management System - DFD User Management Process (Detailed)
+
+!define EXTERNAL_COLOR #E3F2FD
+!define PROCESS_COLOR #E8F5E8
+!define DATASTORE_COLOR #FFF3E0
+
+' External entities
+rectangle "Admin Users" as ADMIN #EXTERNAL_COLOR
+rectangle "Staff Users" as STAFF #EXTERNAL_COLOR
+rectangle "Donors" as DONORS #EXTERNAL_COLOR
+rectangle "Patients" as PATIENTS #EXTERNAL_COLOR
+
+' User Management sub-processes
+rectangle "1.1\nUser Registration" as USER_REG #PROCESS_COLOR
+rectangle "1.2\nUser Authentication" as USER_AUTH #PROCESS_COLOR
+rectangle "1.3\nProfile Management" as PROFILE_MGMT #PROCESS_COLOR
+rectangle "1.4\nRole Management" as ROLE_MGMT #PROCESS_COLOR
+rectangle "1.5\nUser Search &\nFiltering" as USER_SEARCH #PROCESS_COLOR
+rectangle "1.6\nPassword Management" as PASSWORD_MGMT #PROCESS_COLOR
+
+' Data stores
+database "Users" as USER_DB #DATASTORE_COLOR
+database "User Roles" as ROLE_DB #DATASTORE_COLOR
+database "User Sessions" as SESSION_DB #DATASTORE_COLOR
+database "Audit Logs" as AUDIT_DB #DATASTORE_COLOR
+
+' Data flows for User Registration
+ADMIN --> USER_REG : Create user request
+note right : Username, email, password\nRole, blood type, contact info
+
+USER_REG --> USER_REG : Validate input data
+note right : Check username uniqueness\nValidate email format\nVerify password strength
+
+USER_REG --> USER_DB : Store new user
+note right : INSERT INTO users\n(username, email, password, role, etc.)
+
+USER_DB --> USER_REG : User creation confirmation
+USER_REG --> AUDIT_DB : Log user creation
+note right : Record admin action\nTimestamp, user details
+
+USER_REG --> ADMIN : User creation response
+note right : Success/error message\nUser ID confirmation
+
+' Data flows for User Authentication
+STAFF --> USER_AUTH : Login credentials
+DONORS --> USER_AUTH : Login credentials
+PATIENTS --> USER_AUTH : Login credentials
+
+USER_AUTH --> USER_DB : Validate credentials
+note right : SELECT * FROM users\nWHERE username = ? AND is_active = true
+
+USER_DB --> USER_AUTH : User authentication data
+note right : User details, role, permissions\nPassword hash for verification
+
+USER_AUTH --> USER_AUTH : Verify password
+note right : BCrypt password verification\nCheck account status
+
+USER_AUTH --> SESSION_DB : Create user session
+note right : Store JWT token\nSession expiration time
+
+USER_AUTH --> AUDIT_DB : Log login attempt
+note right : Record successful/failed login\nIP address, timestamp
+
+USER_AUTH --> STAFF : Authentication response
+USER_AUTH --> DONORS : Authentication response
+USER_AUTH --> PATIENTS : Authentication response
+note right : JWT token\nUser role and permissions
+
+' Data flows for Profile Management
+STAFF --> PROFILE_MGMT : Profile update request
+DONORS --> PROFILE_MGMT : Profile update request
+PATIENTS --> PROFILE_MGMT : Profile update request
+note right : Update personal information\nContact details, blood type
+
+PROFILE_MGMT --> USER_DB : Retrieve current profile
+note right : SELECT * FROM users\nWHERE id = ?
+
+USER_DB --> PROFILE_MGMT : Current user data
+PROFILE_MGMT --> PROFILE_MGMT : Validate updates
+note right : Check data integrity\nValidate new information
+
+PROFILE_MGMT --> USER_DB : Update user profile
+note right : UPDATE users SET\nfirst_name, last_name, phone_number, etc.
+
+USER_DB --> PROFILE_MGMT : Update confirmation
+PROFILE_MGMT --> AUDIT_DB : Log profile changes
+note right : Record what was changed\nTimestamp, user ID
+
+PROFILE_MGMT --> STAFF : Profile update response
+PROFILE_MGMT --> DONORS : Profile update response
+PROFILE_MGMT --> PATIENTS : Profile update response
+
+' Data flows for Role Management
+ADMIN --> ROLE_MGMT : Role assignment request
+note right : Assign roles to users\nChange user permissions
+
+ROLE_MGMT --> USER_DB : Get user information
+note right : Retrieve user details\nCurrent role assignment
+
+USER_DB --> ROLE_MGMT : User data
+ROLE_MGMT --> ROLE_DB : Get role definitions
+note right : Available roles\nPermission levels
+
+ROLE_DB --> ROLE_MGMT : Role information
+ROLE_MGMT --> ROLE_MGMT : Validate role assignment
+note right : Check role hierarchy\nVerify permissions
+
+ROLE_MGMT --> USER_DB : Update user role
+note right : UPDATE users SET role = ?\nWHERE id = ?
+
+USER_DB --> ROLE_MGMT : Role update confirmation
+ROLE_MGMT --> AUDIT_DB : Log role changes
+note right : Record role modification\nAdmin action, timestamp
+
+ROLE_MGMT --> ADMIN : Role assignment response
+
+' Data flows for User Search and Filtering
+ADMIN --> USER_SEARCH : Search criteria
+note right : Search by name, role\nFilter by status, blood type
+
+USER_SEARCH --> USER_DB : Execute search query
+note right : SELECT * FROM users\nWHERE conditions
+
+USER_DB --> USER_SEARCH : Search results
+USER_SEARCH --> USER_SEARCH : Apply filters
+note right : Sort results\nApply additional criteria
+
+USER_SEARCH --> ADMIN : Filtered user list
+note right : Paginated results\nUser details summary
+
+' Data flows for Password Management
+STAFF --> PASSWORD_MGMT : Password change request
+DONORS --> PASSWORD_MGMT : Password change request
+PATIENTS --> PASSWORD_MGMT : Password change request
+note right : Current password\nNew password
+
+PASSWORD_MGMT --> USER_DB : Verify current password
+note right : Check existing password\nVerify user identity
+
+USER_DB --> PASSWORD_MGMT : Password verification result
+PASSWORD_MGMT --> PASSWORD_MGMT : Validate new password
+note right : Check password strength\nEnsure uniqueness
+
+PASSWORD_MGMT --> USER_DB : Update password
+note right : Hash new password\nUPDATE users SET password
+
+USER_DB --> PASSWORD_MGMT : Password update confirmation
+PASSWORD_MGMT --> AUDIT_DB : Log password change
+note right : Record password modification\nSecurity audit trail
+
+PASSWORD_MGMT --> STAFF : Password change response
+PASSWORD_MGMT --> DONORS : Password change response
+PASSWORD_MGMT --> PATIENTS : Password change response
+
+' Internal data flows
+USER_REG --> ROLE_MGMT : Get available roles
+note right : Check role permissions\nValidate role assignment
+
+PROFILE_MGMT --> USER_SEARCH : Get user by ID
+note right : Retrieve user details\nFor profile updates
+
+ROLE_MGMT --> USER_SEARCH : Get users by role
+note right : Find users with\nspecific role assignments
+
+' Data validation notes
+note over USER_REG : Validate unique username\nCheck email format\nVerify password strength
+
+note over USER_AUTH : Verify credentials\nCheck account status\nCreate secure session
+
+note over PROFILE_MGMT : Validate data integrity\nCheck permission levels\nLog all changes
+
+note over ROLE_MGMT : Verify role hierarchy\nCheck admin permissions\nMaintain security
+
+note over USER_SEARCH : Apply search filters\nPaginate results\nMaintain performance
+
+note over PASSWORD_MGMT : Verify current password\nCheck new password strength\nMaintain security
+
+@enduml

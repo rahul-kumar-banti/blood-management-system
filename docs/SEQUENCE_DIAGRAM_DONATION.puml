@@ -1,0 +1,262 @@
+@startuml Blood Bank Management System - Blood Donation Sequence
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2E7D32
+    LifeLineBorderColor #2E7D32
+    ParticipantBorderColor #2E7D32
+    ParticipantBackgroundColor #E8F5E8
+}
+
+title Blood Bank Management System - Blood Donation Management Sequence
+
+actor "Staff User" as STAFF
+participant "Swing Client" as CLIENT
+participant "DonationController" as DONATION_CONTROLLER
+participant "DonationService" as DONATION_SERVICE
+participant "UserService" as USER_SERVICE
+participant "BloodInventoryService" as INVENTORY_SERVICE
+participant "DonationRepository" as DONATION_REPO
+participant "UserRepository" as USER_REPO
+participant "BloodInventoryRepository" as INVENTORY_REPO
+database "PostgreSQL" as DB
+
+== Record New Blood Donation ==
+
+STAFF -> CLIENT: Open Donation Dialog
+activate CLIENT
+
+CLIENT -> CLIENT: Load donor list
+note right: Fetch active donors\nFilter by DONOR role
+
+CLIENT -> STAFF: Display donation form
+note right: Donor selection\nBlood type\nQuantity\nHealth screening data
+
+STAFF -> CLIENT: Fill donation details
+note right: Select donor\nEnter blood type\nSpecify quantity\nInput health data
+
+CLIENT -> CLIENT: Validate donation data
+note right: Check quantity > 0\nValidate blood type\nVerify health ranges
+
+CLIENT -> DONATION_CONTROLLER: POST /api/donations
+activate DONATION_CONTROLLER
+note right: JSON: {donorId, bloodType, quantity,\nunitOfMeasure, healthScreeningData}
+
+DONATION_CONTROLLER -> DONATION_CONTROLLER: Validate JWT token
+note right: Extract user role\nCheck STAFF permissions
+
+DONATION_CONTROLLER -> DONATION_SERVICE: createDonation(donationRequest)
+activate DONATION_SERVICE
+
+DONATION_SERVICE -> USER_SERVICE: findById(donorId)
+activate USER_SERVICE
+
+USER_SERVICE -> USER_REPO: findById(donorId)
+activate USER_REPO
+
+USER_REPO -> DB: SELECT * FROM users WHERE id = ?
+activate DB
+DB --> USER_REPO: User data
+deactivate DB
+
+USER_REPO --> USER_SERVICE: User entity
+deactivate USER_REPO
+
+USER_SERVICE -> USER_SERVICE: Verify donor role
+note right: Check if user.role = 'DONOR'
+
+USER_SERVICE --> DONATION_SERVICE: User entity
+deactivate USER_SERVICE
+
+DONATION_SERVICE -> DONATION_SERVICE: Generate batch number
+note right: Create unique batch identifier\nFormat: BATCH + timestamp + random
+
+DONATION_SERVICE -> DONATION_SERVICE: Calculate expiry date
+note right: donationDate + 42 days\n(standard blood expiry)
+
+DONATION_SERVICE -> DONATION_SERVICE: Create donation entity
+note right: Set status = 'PENDING'\nInclude all health screening data
+
+DONATION_SERVICE -> DONATION_REPO: save(donation)
+activate DONATION_REPO
+
+DONATION_REPO -> DB: INSERT INTO donations (...)
+activate DB
+DB --> DONATION_REPO: Generated ID
+deactivate DB
+
+DONATION_REPO --> DONATION_SERVICE: Saved donation
+deactivate DONATION_REPO
+
+DONATION_SERVICE -> INVENTORY_SERVICE: addToInventory(donation)
+activate INVENTORY_SERVICE
+
+INVENTORY_SERVICE -> INVENTORY_SERVICE: Create inventory entry
+note right: Set status = 'AVAILABLE'\nLink to donation batch
+
+INVENTORY_SERVICE -> INVENTORY_REPO: save(inventory)
+activate INVENTORY_REPO
+
+INVENTORY_REPO -> DB: INSERT INTO blood_inventory (...)
+activate DB
+DB --> INVENTORY_REPO: Inventory ID
+deactivate DB
+
+INVENTORY_REPO --> INVENTORY_SERVICE: Saved inventory
+deactivate INVENTORY_REPO
+
+INVENTORY_SERVICE --> DONATION_SERVICE: Inventory updated
+deactivate INVENTORY_SERVICE
+
+DONATION_SERVICE -> DONATION_SERVICE: Update donation status
+note right: Set status = 'COMPLETED'
+
+DONATION_SERVICE -> DONATION_REPO: update(donation)
+activate DONATION_REPO
+
+DONATION_REPO -> DB: UPDATE donations SET status = 'COMPLETED' WHERE id = ?
+activate DB
+DB --> DONATION_REPO: Updated rows
+deactivate DB
+
+DONATION_REPO --> DONATION_SERVICE: Updated donation
+deactivate DONATION_REPO
+
+DONATION_SERVICE --> DONATION_CONTROLLER: DonationResponse
+deactivate DONATION_SERVICE
+
+DONATION_CONTROLLER -> DONATION_CONTROLLER: Set response headers
+note right: Content-Type: application/json
+
+DONATION_CONTROLLER --> CLIENT: HTTP 201 + Donation data
+deactivate DONATION_CONTROLLER
+
+CLIENT -> CLIENT: Update donation list
+note right: Refresh donation table\nAdd new donation
+
+CLIENT -> CLIENT: Update inventory display
+note right: Refresh blood inventory\nShow new stock
+
+CLIENT --> STAFF: Display success message
+note right: "Donation recorded successfully!\nBatch: [batchNumber]"
+
+deactivate CLIENT
+
+== View Donation History ==
+
+STAFF -> CLIENT: Request donation history
+activate CLIENT
+
+CLIENT -> DONATION_CONTROLLER: GET /api/donations
+activate DONATION_CONTROLLER
+
+DONATION_CONTROLLER -> DONATION_CONTROLLER: Validate JWT token
+
+DONATION_CONTROLLER -> DONATION_SERVICE: getAllDonations()
+activate DONATION_SERVICE
+
+DONATION_SERVICE -> DONATION_REPO: findAll()
+activate DONATION_REPO
+
+DONATION_REPO -> DB: SELECT * FROM donations ORDER BY donation_date DESC
+activate DB
+DB --> DONATION_REPO: Donation records
+deactivate DB
+
+DONATION_REPO --> DONATION_SERVICE: List of donations
+deactivate DONATION_REPO
+
+DONATION_SERVICE --> DONATION_CONTROLLER: List<Donation>
+deactivate DONATION_SERVICE
+
+DONATION_CONTROLLER --> CLIENT: HTTP 200 + Donations list
+deactivate DONATION_CONTROLLER
+
+CLIENT -> CLIENT: Populate donation table
+note right: Display in JTable\nSort by date
+
+CLIENT --> STAFF: Show donation history
+note right: All donations with details\nStatus, dates, health data
+
+deactivate CLIENT
+
+== Update Donation Status ==
+
+STAFF -> CLIENT: Select donation to update
+activate CLIENT
+
+CLIENT -> STAFF: Show status options
+note right: PENDING, APPROVED, REJECTED,\nCOMPLETED, CANCELLED
+
+STAFF -> CLIENT: Choose new status
+note right: Select from dropdown
+
+CLIENT -> DONATION_CONTROLLER: PUT /api/donations/{id}/status
+activate DONATION_CONTROLLER
+note right: JSON: {status: "APPROVED"}
+
+DONATION_CONTROLLER -> DONATION_SERVICE: updateStatus(id, status)
+activate DONATION_SERVICE
+
+DONATION_SERVICE -> DONATION_REPO: findById(id)
+activate DONATION_REPO
+
+DONATION_REPO -> DB: SELECT * FROM donations WHERE id = ?
+activate DB
+DB --> DONATION_REPO: Donation data
+deactivate DB
+
+DONATION_REPO --> DONATION_SERVICE: Donation entity
+deactivate DONATION_REPO
+
+DONATION_SERVICE -> DONATION_SERVICE: Validate status transition
+note right: Check business rules\nPENDING -> APPROVED/REJECTED\nAPPROVED -> COMPLETED
+
+DONATION_SERVICE -> DONATION_REPO: update(donation)
+activate DONATION_REPO
+
+DONATION_REPO -> DB: UPDATE donations SET status = ? WHERE id = ?
+activate DB
+DB --> DONATION_REPO: Updated rows
+deactivate DB
+
+DONATION_REPO --> DONATION_SERVICE: Updated donation
+deactivate DONATION_REPO
+
+alt Status changed to REJECTED
+    DONATION_SERVICE -> INVENTORY_SERVICE: removeFromInventory(donation)
+    activate INVENTORY_SERVICE
+    
+    INVENTORY_SERVICE -> INVENTORY_REPO: deleteByBatchNumber(batchNumber)
+    activate INVENTORY_REPO
+    
+    INVENTORY_REPO -> DB: DELETE FROM blood_inventory WHERE batch_number = ?
+    activate DB
+    DB --> INVENTORY_REPO: Deleted rows
+    deactivate DB
+    
+    INVENTORY_REPO --> INVENTORY_SERVICE: Inventory removed
+    deactivate INVENTORY_REPO
+    
+    INVENTORY_SERVICE --> DONATION_SERVICE: Inventory updated
+    deactivate INVENTORY_SERVICE
+end
+
+DONATION_SERVICE --> DONATION_CONTROLLER: Updated donation
+deactivate DONATION_SERVICE
+
+DONATION_CONTROLLER --> CLIENT: HTTP 200 + Updated donation
+deactivate DONATION_CONTROLLER
+
+CLIENT -> CLIENT: Refresh donation table
+note right: Update status display
+
+CLIENT -> CLIENT: Update inventory if needed
+note right: Remove rejected donations
+
+CLIENT --> STAFF: Show success message
+note right: "Donation status updated to [status]"
+
+deactivate CLIENT
+
+@enduml

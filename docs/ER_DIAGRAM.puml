@@ -1,0 +1,135 @@
+@startuml Blood Bank Management System - ER Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam entity {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    ArrowColor #2E7D32
+}
+
+title Blood Bank Management System - Entity Relationship Diagram
+
+' Users Entity
+entity "USERS" {
+    * id : BIGINT (PK)
+    --
+    * username : VARCHAR(50) (UK)
+    * email : VARCHAR(100) (UK)
+    * password : VARCHAR(255)
+    * first_name : VARCHAR(100)
+    * last_name : VARCHAR(100)
+    phone_number : VARCHAR(20)
+    * role : VARCHAR(20)
+    blood_type : VARCHAR(10)
+    * is_active : BOOLEAN
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+}
+
+' Blood Inventory Entity
+entity "BLOOD_INVENTORY" {
+    * id : BIGINT (PK)
+    --
+    * blood_type : VARCHAR(10)
+    * quantity : INTEGER
+    unit_of_measure : VARCHAR(10)
+    expiry_date : TIMESTAMP
+    collection_date : TIMESTAMP
+    donor_id : BIGINT (FK)
+    batch_number : VARCHAR(50)
+    * status : VARCHAR(20)
+    notes : TEXT
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+}
+
+' Donations Entity
+entity "DONATIONS" {
+    * id : BIGINT (PK)
+    --
+    * donor_id : BIGINT (FK)
+    * blood_type : VARCHAR(10)
+    * quantity : INTEGER
+    * unit_of_measure : VARCHAR(10)
+    * donation_date : TIMESTAMP
+    * expiry_date : TIMESTAMP
+    * batch_number : VARCHAR(50) (UK)
+    * status : VARCHAR(20)
+    health_screening_passed : BOOLEAN
+    hemoglobin_level : DECIMAL(5,2)
+    blood_pressure : VARCHAR(20)
+    pulse_rate : INTEGER
+    temperature : DECIMAL(4,2)
+    notes : TEXT
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+}
+
+' Requests Entity
+entity "REQUESTS" {
+    * id : BIGINT (PK)
+    --
+    * requester_id : BIGINT (FK)
+    * hospital_name : VARCHAR(200)
+    * patient_name : VARCHAR(200)
+    * blood_type : VARCHAR(10)
+    * quantity : INTEGER
+    * unit_of_measure : VARCHAR(10)
+    * request_date : TIMESTAMP
+    * required_date : TIMESTAMP
+    * priority : VARCHAR(20)
+    * status : VARCHAR(20)
+    reason : TEXT
+    doctor_name : VARCHAR(200)
+    contact_number : VARCHAR(20)
+    notes : TEXT
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+}
+
+' Relationships
+USERS ||--o{ DONATIONS : "donates"
+USERS ||--o{ REQUESTS : "requests"
+USERS ||--o{ BLOOD_INVENTORY : "donates to"
+
+' Notes
+note right of USERS
+    Primary entity for all users
+    Supports multiple roles:
+    - ADMIN
+    - STAFF  
+    - DONOR
+    - PATIENT
+end note
+
+note right of BLOOD_INVENTORY
+    Tracks available blood stock
+    Status values:
+    - AVAILABLE
+    - RESERVED
+    - EXPIRED
+    - DISCARDED
+    - IN_TRANSIT
+end note
+
+note right of DONATIONS
+    Records blood donations
+    with health screening data
+    Status values:
+    - PENDING
+    - APPROVED
+    - REJECTED
+    - COMPLETED
+    - CANCELLED
+end note
+
+note right of REQUESTS
+    Blood request management
+    Priority levels:
+    - LOW
+    - NORMAL
+    - HIGH
+    - URGENT
+end note
+
+@enduml

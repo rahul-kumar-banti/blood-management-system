@@ -1,0 +1,96 @@
+@startuml Blood Bank Management System - DFD Level 0 (Context)
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+}
+skinparam component {
+    BackgroundColor #FFF3E0
+    BorderColor #F57C00
+}
+
+title Blood Bank Management System - DFD Level 0 (Context Diagram)
+
+!define EXTERNAL_COLOR #E3F2FD
+!define SYSTEM_COLOR #E8F5E8
+!define DATASTORE_COLOR #FFF3E0
+
+rectangle "Blood Bank\nManagement System" as SYSTEM #SYSTEM_COLOR
+
+rectangle "Admin Users" as ADMIN #EXTERNAL_COLOR
+rectangle "Staff Users" as STAFF #EXTERNAL_COLOR
+rectangle "Donors" as DONORS #EXTERNAL_COLOR
+rectangle "Patients/Requesters" as PATIENTS #EXTERNAL_COLOR
+rectangle "Hospitals" as HOSPITALS #EXTERNAL_COLOR
+
+component "User Database" as USER_DB #DATASTORE_COLOR
+component "Blood Inventory\nDatabase" as INVENTORY_DB #DATASTORE_COLOR
+component "Donation\nDatabase" as DONATION_DB #DATASTORE_COLOR
+component "Request\nDatabase" as REQUEST_DB #DATASTORE_COLOR
+
+' Admin interactions
+ADMIN --> SYSTEM : User management requests
+note right : Create, update, delete users\nManage roles and permissions
+
+SYSTEM --> ADMIN : User management responses
+note right : User lists, confirmation messages\nSystem status reports
+
+' Staff interactions
+STAFF --> SYSTEM : Blood donation records
+note right : Donor information, health screening data\nBlood type, quantity, collection details
+
+STAFF --> SYSTEM : Inventory management requests
+note right : View stock levels, update quantities\nCheck expiry dates, manage batches
+
+SYSTEM --> STAFF : Inventory information
+note right : Current stock levels, expiry alerts\nDonation history, batch information
+
+' Donor interactions
+DONORS --> SYSTEM : Personal information
+note right : Profile updates, contact details\nBlood type, donation preferences
+
+SYSTEM --> DONORS : Donation records
+note right : Donation history, appointment schedules\nHealth screening results
+
+' Patient/Requester interactions
+PATIENTS --> SYSTEM : Blood requests
+note right : Hospital details, patient information\nBlood type needed, quantity, priority
+
+SYSTEM --> PATIENTS : Request status
+note right : Request confirmation, approval status\nFulfillment updates
+
+' Hospital interactions
+HOSPITALS --> SYSTEM : Blood requirements
+note right : Emergency requests, scheduled needs\nSpecial blood type requirements
+
+SYSTEM --> HOSPITALS : Blood availability
+note right : Stock levels, delivery confirmations\nRequest processing status
+
+' Data flows to databases
+SYSTEM --> USER_DB : User CRUD operations
+note right : Store user profiles, authentication data\nRole assignments, activity logs
+
+SYSTEM --> INVENTORY_DB : Inventory updates
+note right : Stock level changes, batch management\nExpiry tracking, status updates
+
+SYSTEM --> DONATION_DB : Donation records
+note right : Store donation details, health data\nBatch information, status tracking
+
+SYSTEM --> REQUEST_DB : Request management
+note right : Blood requests, approval status\nFulfillment tracking, priority management
+
+' Data retrieval from databases
+USER_DB --> SYSTEM : User data queries
+note right : Authentication, profile information\nRole-based access control
+
+INVENTORY_DB --> SYSTEM : Inventory queries
+note right : Stock levels, availability checks\nExpiry date information
+
+DONATION_DB --> SYSTEM : Donation queries
+note right : Donation history, batch information\nHealth screening data
+
+REQUEST_DB --> SYSTEM : Request queries
+note right : Pending requests, status information\nPriority-based processing
+
+@enduml

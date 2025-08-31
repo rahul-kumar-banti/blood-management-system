@@ -1,0 +1,131 @@
+@startuml Blood Bank Management System - Simple Class Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam class {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    ArrowColor #2E7D32
+}
+
+title Blood Bank Management System - Core Classes
+
+' Core Entities
+class User {
+    -Long id
+    -String username
+    -String email
+    -String password
+    -String firstName
+    -String lastName
+    -String phoneNumber
+    -Role role
+    -BloodType bloodType
+    -boolean isActive
+    -LocalDateTime createdAt
+    -LocalDateTime updatedAt
+}
+
+class BloodInventory {
+    -Long id
+    -BloodType bloodType
+    -Integer quantity
+    -String unitOfMeasure
+    -LocalDateTime expiryDate
+    -LocalDateTime collectionDate
+    -Long donorId
+    -String batchNumber
+    -Status status
+    -LocalDateTime createdAt
+    -LocalDateTime updatedAt
+}
+
+class Donation {
+    -Long id
+    -User donor
+    -BloodType bloodType
+    -Integer quantity
+    -LocalDateTime donationDate
+    -LocalDateTime expiryDate
+    -String batchNumber
+    -DonationStatus status
+    -LocalDateTime createdAt
+    -LocalDateTime updatedAt
+}
+
+class Request {
+    -Long id
+    -User requester
+    -String hospitalName
+    -String patientName
+    -BloodType bloodType
+    -Integer quantity
+    -LocalDateTime requestDate
+    -LocalDateTime requiredDate
+    -Priority priority
+    -RequestStatus status
+    -LocalDateTime createdAt
+    -LocalDateTime updatedAt
+}
+
+' Enums
+enum Role {
+    ADMIN
+    STAFF
+    DONOR
+    PATIENT
+}
+
+enum BloodType {
+    A_POSITIVE
+    A_NEGATIVE
+    B_POSITIVE
+    B_NEGATIVE
+    AB_POSITIVE
+    AB_NEGATIVE
+    O_POSITIVE
+    O_NEGATIVE
+}
+
+enum DonationStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    COMPLETED
+    CANCELLED
+}
+
+enum RequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    FULFILLED
+    CANCELLED
+}
+
+enum Priority {
+    LOW
+    NORMAL
+    HIGH
+    URGENT
+}
+
+' Relationships
+User ||--o{ Donation : "donates"
+User ||--o{ Request : "requests"
+User ||--o{ BloodInventory : "donates to"
+
+' Inheritance
+User ..|> UserDetails : implements
+
+' Notes
+note right of User
+    Core user entity with
+    authentication and roles
+end note
+
+note right of BloodInventory
+    Blood stock management
+    with expiry tracking
+end note
+
+@enduml

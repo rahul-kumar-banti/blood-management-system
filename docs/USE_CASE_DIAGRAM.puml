@@ -1,0 +1,156 @@
+@startuml Blood Bank Management System - Use Case Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam usecase {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    ArrowColor #2E7D32
+}
+
+title Blood Bank Management System - Use Case Diagram
+
+' Define actors
+actor "Admin User" as ADMIN
+actor "Staff User" as STAFF
+actor "Donor" as DONOR
+actor "Patient/Requester" as PATIENT
+actor "System" as SYSTEM
+
+' Define use case packages
+package "User Management" {
+    usecase "Login to System" as UC_LOGIN
+    usecase "Logout from System" as UC_LOGOUT
+    usecase "Register New User" as UC_REGISTER
+    usecase "View User Profile" as UC_VIEW_PROFILE
+    usecase "Update User Profile" as UC_UPDATE_PROFILE
+    usecase "Change Password" as UC_CHANGE_PASSWORD
+    usecase "Manage User Roles" as UC_MANAGE_ROLES
+    usecase "Search Users" as UC_SEARCH_USERS
+    usecase "Delete User" as UC_DELETE_USER
+}
+
+package "Blood Inventory Management" {
+    usecase "View Blood Inventory" as UC_VIEW_INVENTORY
+    usecase "Add Blood Stock" as UC_ADD_STOCK
+    usecase "Update Blood Stock" as UC_UPDATE_STOCK
+    usecase "Remove Blood Stock" as UC_REMOVE_STOCK
+    usecase "Check Blood Availability" as UC_CHECK_AVAILABILITY
+    usecase "Generate Inventory Report" as UC_INVENTORY_REPORT
+    usecase "Set Blood Stock Alerts" as UC_STOCK_ALERTS
+}
+
+package "Blood Donation Management" {
+    usecase "Record Blood Donation" as UC_RECORD_DONATION
+    usecase "View Donation History" as UC_VIEW_DONATIONS
+    usecase "Update Donation Status" as UC_UPDATE_DONATION_STATUS
+    usecase "Schedule Donation" as UC_SCHEDULE_DONATION
+    usecase "Cancel Donation" as UC_CANCEL_DONATION
+    usecase "Generate Donation Report" as UC_DONATION_REPORT
+}
+
+package "Blood Request Management" {
+    usecase "Submit Blood Request" as UC_SUBMIT_REQUEST
+    usecase "View Blood Requests" as UC_VIEW_REQUESTS
+    usecase "Approve Blood Request" as UC_APPROVE_REQUEST
+    usecase "Reject Blood Request" as UC_REJECT_REQUEST
+    usecase "Update Request Status" as UC_UPDATE_REQUEST_STATUS
+    usecase "Process Blood Request" as UC_PROCESS_REQUEST
+    usecase "Generate Request Report" as UC_REQUEST_REPORT
+}
+
+package "System Administration" {
+    usecase "View System Dashboard" as UC_VIEW_DASHBOARD
+    usecase "Generate System Reports" as UC_SYSTEM_REPORTS
+    usecase "Configure System Settings" as UC_CONFIGURE_SETTINGS
+    usecase "Manage Database" as UC_MANAGE_DATABASE
+    usecase "View System Logs" as UC_VIEW_LOGS
+    usecase "Backup System Data" as UC_BACKUP_DATA
+}
+
+' Define relationships
+' Admin User relationships
+ADMIN --> UC_LOGIN
+ADMIN --> UC_LOGOUT
+ADMIN --> UC_VIEW_DASHBOARD
+ADMIN --> UC_MANAGE_ROLES
+ADMIN --> UC_DELETE_USER
+ADMIN --> UC_CONFIGURE_SETTINGS
+ADMIN --> UC_MANAGE_DATABASE
+ADMIN --> UC_BACKUP_DATA
+
+' Staff User relationships
+STAFF --> UC_LOGIN
+STAFF --> UC_LOGOUT
+STAFF --> UC_VIEW_DASHBOARD
+STAFF --> UC_VIEW_INVENTORY
+STAFF --> UC_ADD_STOCK
+STAFF --> UC_UPDATE_STOCK
+STAFF --> UC_RECORD_DONATION
+STAFF --> UC_VIEW_DONATIONS
+STAFF --> UC_UPDATE_DONATION_STATUS
+STAFF --> UC_VIEW_REQUESTS
+STAFF --> UC_APPROVE_REQUEST
+STAFF --> UC_REJECT_REQUEST
+STAFF --> UC_PROCESS_REQUEST
+STAFF --> UC_GENERATE_REPORTS
+
+' Donor relationships
+DONOR --> UC_LOGIN
+DONOR --> UC_LOGOUT
+DONOR --> UC_VIEW_PROFILE
+DONOR --> UC_UPDATE_PROFILE
+DONOR --> UC_SCHEDULE_DONATION
+DONOR --> UC_CANCEL_DONATION
+DONOR --> UC_VIEW_DONATIONS
+
+' Patient/Requester relationships
+PATIENT --> UC_LOGIN
+PATIENT --> UC_LOGOUT
+PATIENT --> UC_VIEW_PROFILE
+PATIENT --> UC_SUBMIT_REQUEST
+PATIENT --> UC_VIEW_REQUESTS
+PATIENT --> UC_CHECK_AVAILABILITY
+
+' System relationships
+SYSTEM --> UC_STOCK_ALERTS
+SYSTEM --> UC_BACKUP_DATA
+SYSTEM --> UC_VIEW_LOGS
+
+' Include relationships
+UC_VIEW_DASHBOARD ..> UC_VIEW_INVENTORY : <<include>>
+UC_VIEW_DASHBOARD ..> UC_VIEW_REQUESTS : <<include>>
+UC_VIEW_DASHBOARD ..> UC_VIEW_DONATIONS : <<include>>
+
+UC_APPROVE_REQUEST ..> UC_CHECK_AVAILABILITY : <<include>>
+UC_PROCESS_REQUEST ..> UC_UPDATE_STOCK : <<include>>
+UC_RECORD_DONATION ..> UC_ADD_STOCK : <<include>>
+
+UC_GENERATE_REPORTS ..> UC_INVENTORY_REPORT : <<include>>
+UC_GENERATE_REPORTS ..> UC_DONATION_REPORT : <<include>>
+UC_GENERATE_REPORTS ..> UC_REQUEST_REPORT : <<include>>
+
+' Extend relationships
+UC_VIEW_INVENTORY <.. UC_STOCK_ALERTS : <<extend>>
+UC_SUBMIT_REQUEST <.. UC_CHECK_AVAILABILITY : <<extend>>
+UC_UPDATE_STOCK <.. UC_STOCK_ALERTS : <<extend>>
+
+' Notes
+note right of UC_LOGIN
+    Uses JWT authentication
+    Role-based access control
+end note
+
+note right of UC_VIEW_DASHBOARD
+    Shows real-time statistics
+    Blood inventory levels
+    Pending requests
+    Recent donations
+end note
+
+note right of UC_STOCK_ALERTS
+    Automatic notifications
+    Low stock warnings
+    Expiry date alerts
+end note
+
+@enduml

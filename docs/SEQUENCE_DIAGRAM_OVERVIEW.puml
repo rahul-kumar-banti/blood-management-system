@@ -1,0 +1,82 @@
+@startuml Blood Bank Management System - Overview Sequence
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2E7D32
+    LifeLineBorderColor #2E7D32
+    ParticipantBorderColor #2E7D32
+    ParticipantBackgroundColor #E8F5E8
+}
+
+title Blood Bank Management System - Overview Sequence
+
+actor "User" as USER
+participant "Swing Client" as CLIENT
+participant "Spring Boot Backend" as BACKEND
+participant "Database" as DB
+
+== User Authentication ==
+
+USER -> CLIENT: Login with credentials
+CLIENT -> BACKEND: POST /api/auth/login
+BACKEND -> DB: Validate user credentials
+DB --> BACKEND: User data
+BACKEND --> CLIENT: JWT token
+CLIENT -> CLIENT: Store token
+CLIENT --> USER: Show main dashboard
+
+== Blood Donation Management ==
+
+USER -> CLIENT: Record blood donation
+CLIENT -> BACKEND: POST /api/donations
+BACKEND -> DB: Save donation record
+DB --> BACKEND: Confirmation
+BACKEND -> DB: Update blood inventory
+DB --> BACKEND: Inventory updated
+BACKEND --> CLIENT: Donation confirmed
+CLIENT --> USER: Show success message
+
+== Blood Request Management ==
+
+USER -> CLIENT: Submit blood request
+CLIENT -> BACKEND: POST /api/requests
+BACKEND -> DB: Save request
+DB --> BACKEND: Request saved
+BACKEND --> CLIENT: Request confirmed
+CLIENT --> USER: Show request status
+
+== Blood Inventory Management ==
+
+USER -> CLIENT: View blood inventory
+CLIENT -> BACKEND: GET /api/inventory
+BACKEND -> DB: Query inventory
+DB --> BACKEND: Inventory data
+BACKEND --> CLIENT: Inventory list
+CLIENT --> USER: Display inventory
+
+== User Management ==
+
+USER -> CLIENT: Manage users
+CLIENT -> BACKEND: GET/POST/PUT /api/users
+BACKEND -> DB: User operations
+DB --> BACKEND: User data
+BACKEND --> CLIENT: User information
+CLIENT --> USER: Show user data
+
+== System Reports ==
+
+USER -> CLIENT: Generate reports
+CLIENT -> BACKEND: GET /api/reports
+BACKEND -> DB: Aggregate data
+DB --> BACKEND: Report data
+BACKEND --> CLIENT: Report content
+CLIENT --> USER: Display reports
+
+== Logout ==
+
+USER -> CLIENT: Logout
+CLIENT -> CLIENT: Clear JWT token
+CLIENT -> CLIENT: Reset UI state
+CLIENT --> USER: Show login form
+
+@enduml

@@ -1,0 +1,134 @@
+@startuml Blood Bank Management System - DFD Level 1
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+}
+skinparam component {
+    BackgroundColor #FFF3E0
+    BorderColor #F57C00
+}
+
+title Blood Bank Management System - DFD Level 1 (Main Processes)
+
+!define EXTERNAL_COLOR #E3F2FD
+!define PROCESS_COLOR #E8F5E8
+!define DATASTORE_COLOR #FFF3E0
+
+' External entities
+rectangle "Admin Users" as ADMIN #EXTERNAL_COLOR
+rectangle "Staff Users" as STAFF #EXTERNAL_COLOR
+rectangle "Donors" as DONORS #EXTERNAL_COLOR
+rectangle "Patients/Requesters" as PATIENTS #EXTERNAL_COLOR
+rectangle "Hospitals" as HOSPITALS #EXTERNAL_COLOR
+
+' Main processes
+rectangle "1.0\nUser Management" as USER_MGMT #PROCESS_COLOR
+rectangle "2.0\nAuthentication &\nAuthorization" as AUTH #PROCESS_COLOR
+rectangle "3.0\nBlood Donation\nManagement" as DONATION_MGMT #PROCESS_COLOR
+rectangle "4.0\nBlood Inventory\nManagement" as INVENTORY_MGMT #PROCESS_COLOR
+rectangle "5.0\nBlood Request\nManagement" as REQUEST_MGMT #PROCESS_COLOR
+rectangle "6.0\nReporting &\nAnalytics" as REPORTING #PROCESS_COLOR
+
+' Data stores
+component "Users" as USER_DB #DATASTORE_COLOR
+component "Blood Inventory" as INVENTORY_DB #DATASTORE_COLOR
+component "Donations" as DONATION_DB #DATASTORE_COLOR
+component "Requests" as REQUEST_DB #DATASTORE_COLOR
+
+' Data flows from external entities to processes
+ADMIN --> USER_MGMT : User management requests
+note right : Create, update, delete users\nRole assignments
+
+STAFF --> DONATION_MGMT : Donation data
+note right : Health screening results\nBlood collection details
+
+DONORS --> USER_MGMT : Profile updates
+note right : Personal information\nContact details
+
+PATIENTS --> REQUEST_MGMT : Blood requests
+note right : Hospital details, patient info\nBlood type, quantity, priority
+
+HOSPITALS --> REQUEST_MGMT : Emergency requests
+note right : Urgent blood needs\nSpecial requirements
+
+' Authentication flows
+ADMIN --> AUTH : Login credentials
+STAFF --> AUTH : Login credentials
+DONORS --> AUTH : Login credentials
+PATIENTS --> AUTH : Login credentials
+
+AUTH --> USER_DB : Validate credentials
+USER_DB --> AUTH : User authentication data
+AUTH --> ADMIN : Authentication response
+AUTH --> STAFF : Authentication response
+AUTH --> DONORS : Authentication response
+AUTH --> PATIENTS : Authentication response
+
+' User management flows
+USER_MGMT --> USER_DB : CRUD operations
+USER_DB --> USER_MGMT : User data
+USER_MGMT --> ADMIN : User management responses
+
+' Donation management flows
+DONATION_MGMT --> DONATION_DB : Store donation records
+DONATION_DB --> DONATION_MGMT : Donation history
+DONATION_MGMT --> INVENTORY_MGMT : New blood stock
+note right : Trigger inventory update\nwhen donation is completed
+
+DONATION_MGMT --> STAFF : Donation confirmation
+DONATION_MGMT --> DONORS : Donation status
+
+' Inventory management flows
+INVENTORY_MGMT --> INVENTORY_DB : Update inventory
+INVENTORY_DB --> INVENTORY_MGMT : Current stock levels
+INVENTORY_MGMT --> STAFF : Inventory information
+note right : Stock levels, expiry alerts\nBatch information
+
+INVENTORY_MGMT --> REQUEST_MGMT : Availability checks
+note right : Check if requested blood\nis available
+
+' Request management flows
+REQUEST_MGMT --> REQUEST_DB : Store blood requests
+REQUEST_DB --> REQUEST_MGMT : Request status
+REQUEST_MGMT --> PATIENTS : Request confirmation
+REQUEST_MGMT --> HOSPITALS : Request status updates
+
+REQUEST_MGMT --> INVENTORY_MGMT : Reserve blood
+note right : Mark blood as reserved\nwhen request is approved
+
+' Reporting flows
+REPORTING --> USER_DB : User statistics
+REPORTING --> INVENTORY_DB : Inventory reports
+REPORTING --> DONATION_DB : Donation analytics
+REPORTING --> REQUEST_DB : Request statistics
+
+REPORTING --> ADMIN : System reports
+REPORTING --> STAFF : Operational reports
+
+' Internal data flows between processes
+USER_MGMT --> DONATION_MGMT : Donor information
+note right : Get donor details\nfor donation records
+
+USER_MGMT --> REQUEST_MGMT : Requester information
+note right : Get requester details\nfor blood requests
+
+DONATION_MGMT --> INVENTORY_MGMT : New blood stock
+note right : Add donated blood\nto inventory
+
+REQUEST_MGMT --> INVENTORY_MGMT : Blood reservation
+note right : Reserve blood for\napproved requests
+
+' Data validation and business rules
+note over USER_MGMT : Validate user data\nCheck role permissions
+
+note over DONATION_MGMT : Validate health data\nCheck donor eligibility
+
+note over INVENTORY_MGMT : Track expiry dates\nManage stock levels
+
+note over REQUEST_MGMT : Check availability\nProcess by priority
+
+note over REPORTING : Aggregate data\nGenerate insights
+
+@enduml

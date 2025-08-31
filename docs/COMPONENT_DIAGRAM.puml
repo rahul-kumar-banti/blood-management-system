@@ -1,0 +1,61 @@
+@startuml Blood Bank Management System - Component Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+
+title Blood Bank Management System - Component Diagram
+
+' Define components
+component "Java Swing Client" as CLIENT
+component "Client Services" as CLIENT_SERVICES
+component "HTTPS REST API" as REST_API
+component "Spring Boot Application" as SPRING_APP
+component "Controllers" as CONTROLLERS
+component "Services" as SERVICES
+component "Repositories" as REPOSITORIES
+component "Security" as SECURITY
+component "JWT Service" as JWT_SERVICE
+component "DTOs" as DTOS
+component "Entities" as ENTITIES
+component "PostgreSQL Database" as DATABASE
+component "Configuration" as CONFIG
+
+' Define relationships
+CLIENT --> CLIENT_SERVICES : uses
+CLIENT_SERVICES --> REST_API : HTTP requests
+REST_API --> CONTROLLERS : routes to
+CONTROLLERS --> SERVICES : calls
+SERVICES --> REPOSITORIES : uses
+REPOSITORIES --> DATABASE : JDBC/JPA
+SERVICES --> ENTITIES : manages
+SERVICES --> DTOS : transforms
+SECURITY --> JWT_SERVICE : uses
+SPRING_APP --> CONFIG : reads
+SPRING_APP --> SECURITY : configures
+
+' Group components by tier
+package "Presentation Tier" {
+    CLIENT
+    CLIENT_SERVICES
+}
+
+package "Application Tier" {
+    REST_API
+    SPRING_APP
+    CONTROLLERS
+    SERVICES
+    REPOSITORIES
+    SECURITY
+    JWT_SERVICE
+    DTOS
+    ENTITIES
+}
+
+package "Data Tier" {
+    DATABASE
+}
+
+package "External" {
+    CONFIG
+}
+
+@enduml

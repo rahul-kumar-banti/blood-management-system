@@ -1,0 +1,196 @@
+@startuml Blood Bank Management System - DFD Blood Donation Process
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #FFF3E0
+    BorderColor #F57C00
+}
+
+title Blood Bank Management System - DFD Blood Donation Process (Detailed)
+
+!define EXTERNAL_COLOR #E3F2FD
+!define PROCESS_COLOR #E8F5E8
+!define DATASTORE_COLOR #FFF3E0
+
+' External entities
+rectangle "Staff Users" as STAFF #EXTERNAL_COLOR
+rectangle "Donors" as DONORS #EXTERNAL_COLOR
+rectangle "Medical Equipment" as EQUIPMENT #EXTERNAL_COLOR
+
+' Blood Donation sub-processes
+rectangle "3.1\nDonor Registration &\nScreening" as DONOR_SCREENING #PROCESS_COLOR
+rectangle "3.2\nHealth Assessment" as HEALTH_ASSESSMENT #PROCESS_COLOR
+rectangle "3.3\nBlood Collection" as BLOOD_COLLECTION #PROCESS_COLOR
+rectangle "3.4\nSample Testing" as SAMPLE_TESTING #PROCESS_COLOR
+rectangle "3.5\nDonation Processing" as DONATION_PROCESSING #PROCESS_COLOR
+rectangle "3.6\nInventory Update" as INVENTORY_UPDATE #PROCESS_COLOR
+rectangle "3.7\nDonation Tracking" as DONATION_TRACKING #PROCESS_COLOR
+
+' Data stores
+database "Users" as USER_DB #DATASTORE_COLOR
+database "Donations" as DONATION_DB #DATASTORE_COLOR
+database "Blood Inventory" as INVENTORY_DB #DATASTORE_COLOR
+database "Health Records" as HEALTH_DB #DATASTORE_COLOR
+database "Batch Records" as BATCH_DB #DATASTORE_COLOR
+database "Audit Logs" as AUDIT_DB #DATASTORE_COLOR
+
+' Data flows for Donor Registration and Screening
+STAFF --> DONOR_SCREENING : Donor information
+note right : Personal details, contact info\nPrevious donation history
+
+DONOR_SCREENING --> USER_DB : Check donor eligibility
+note right : Verify donor exists\nCheck donation frequency\nValidate age requirements
+
+USER_DB --> DONOR_SCREENING : Donor eligibility data
+note right : Last donation date\nBlood type, health status\nDonation restrictions
+
+DONOR_SCREENING --> DONOR_SCREENING : Validate eligibility
+note right : Check time since last donation\nVerify age requirements\nCheck health status
+
+DONOR_SCREENING --> STAFF : Eligibility confirmation
+note right : Can donate or restrictions\nRequired waiting period
+
+' Data flows for Health Assessment
+STAFF --> HEALTH_ASSESSMENT : Health screening data
+note right : Blood pressure, pulse rate\nTemperature, hemoglobin level\nMedical questionnaire
+
+EQUIPMENT --> HEALTH_ASSESSMENT : Vital signs
+note right : Automated readings\nManual measurements\nEquipment calibration data
+
+HEALTH_ASSESSMENT --> HEALTH_ASSESSMENT : Assess health status
+note right : Compare with normal ranges\nCheck for disqualifying conditions\nCalculate eligibility score
+
+HEALTH_ASSESSMENT --> HEALTH_DB : Store health assessment
+note right : INSERT INTO health_records\n(vital_signs, assessment_date, donor_id)
+
+HEALTH_DB --> HEALTH_ASSESSMENT : Health record confirmation
+HEALTH_ASSESSMENT --> STAFF : Health assessment result
+note right : Passed/failed screening\nSpecific health concerns\nRecommendations
+
+' Data flows for Blood Collection
+STAFF --> BLOOD_COLLECTION : Collection parameters
+note right : Target volume, collection method\nEquipment settings, donor comfort
+
+EQUIPMENT --> BLOOD_COLLECTION : Collection monitoring
+note right : Real-time volume tracking\nFlow rate monitoring\nSafety alerts
+
+BLOOD_COLLECTION --> BLOOD_COLLECTION : Monitor collection
+note right : Track collected volume\nMonitor donor condition\nHandle complications
+
+BLOOD_COLLECTION --> STAFF : Collection status
+note right : Volume collected, time taken\nDonor condition, any issues
+
+' Data flows for Sample Testing
+BLOOD_COLLECTION --> SAMPLE_TESTING : Blood samples
+note right : Primary collection bag\nTesting samples\nQuality control samples
+
+EQUIPMENT --> SAMPLE_TESTING : Test results
+note right : Automated test results\nQuality indicators\nContamination checks
+
+SAMPLE_TESTING --> SAMPLE_TESTING : Analyze test results
+note right : Check blood quality\nVerify safety standards\nIdentify any issues
+
+SAMPLE_TESTING --> HEALTH_DB : Store test results
+note right : Test outcomes, quality metrics\nSafety confirmations
+
+SAMPLE_TESTING --> STAFF : Testing results
+note right : Blood quality assessment\nSafety confirmation\nAny concerns
+
+' Data flows for Donation Processing
+STAFF --> DONATION_PROCESSING : Process donation request
+note right : Approve donation for processing\nSet processing parameters
+
+DONATION_PROCESSING --> DONATION_PROCESSING : Generate batch number
+note right : Create unique identifier\nLink to donor and collection\nSet processing date
+
+DONATION_PROCESSING --> BATCH_DB : Store batch information
+note right : INSERT INTO batch_records\n(batch_number, donor_id, collection_date)
+
+BATCH_DB --> DONATION_PROCESSING : Batch confirmation
+DONATION_PROCESSING --> DONATION_DB : Create donation record
+note right : INSERT INTO donations\n(donor_id, blood_type, quantity, batch_number, status)
+
+DONATION_DB --> DONATION_PROCESSING : Donation confirmation
+
+' Data flows for Inventory Update
+DONATION_PROCESSING --> INVENTORY_UPDATE : New blood stock
+note right : Blood type, quantity\nBatch number, collection date
+
+INVENTORY_UPDATE --> INVENTORY_UPDATE : Calculate expiry date
+note right : Collection date + 42 days\nStandard blood expiry period
+
+INVENTORY_UPDATE --> INVENTORY_DB : Add to inventory
+note right : INSERT INTO blood_inventory\n(blood_type, quantity, batch_number, expiry_date, status)
+
+INVENTORY_DB --> INVENTORY_UPDATE : Inventory confirmation
+INVENTORY_UPDATE --> STAFF : Inventory update status
+note right : Stock added successfully\nNew inventory levels
+
+' Data flows for Donation Tracking
+STAFF --> DONATION_TRACKING : Track donation request
+note right : Monitor donation status\nCheck processing progress
+
+DONATION_TRACKING --> DONATION_DB : Query donation status
+note right : SELECT * FROM donations\nWHERE batch_number = ?
+
+DONATION_DB --> DONATION_TRACKING : Donation status
+note right : Current status, processing stage\nTimeline information
+
+DONATION_TRACKING --> INVENTORY_DB : Check inventory status
+note right : Verify blood in stock\nCheck availability status
+
+INVENTORY_DB --> DONATION_TRACKING : Inventory status
+DONATION_TRACKING --> STAFF : Tracking information
+note right : Donation progress\nInventory status\nNext steps
+
+' Data flows for donor feedback
+STAFF --> DONORS : Donation confirmation
+note right : Success confirmation\nBatch number, next steps
+
+DONORS --> STAFF : Donation feedback
+note right : Experience feedback\nHealth concerns\nFollow-up requests
+
+' Audit and logging
+DONOR_SCREENING --> AUDIT_DB : Log screening activities
+HEALTH_ASSESSMENT --> AUDIT_DB : Log health assessments
+BLOOD_COLLECTION --> AUDIT_DB : Log collection activities
+SAMPLE_TESTING --> AUDIT_DB : Log test results
+DONATION_PROCESSING --> AUDIT_DB : Log processing steps
+INVENTORY_UPDATE --> AUDIT_DB : Log inventory changes
+
+' Internal data flows
+DONOR_SCREENING --> HEALTH_ASSESSMENT : Eligible donor info
+note right : Pass donor details\nTo health assessment
+
+HEALTH_ASSESSMENT --> BLOOD_COLLECTION : Health clearance
+note right : Health screening passed\nProceed to collection
+
+BLOOD_COLLECTION --> SAMPLE_TESTING : Collection samples
+note right : Send samples for testing\nQuality verification
+
+SAMPLE_TESTING --> DONATION_PROCESSING : Quality approval
+note right : Tests passed\nProcess donation
+
+DONATION_PROCESSING --> INVENTORY_UPDATE : Processed donation
+note right : Update inventory\nWith new blood stock
+
+' Data validation notes
+note over DONOR_SCREENING : Check donation frequency\nVerify age requirements\nCheck health restrictions
+
+note over HEALTH_ASSESSMENT : Validate vital signs\nCheck medical history\nAssess risk factors
+
+note over BLOOD_COLLECTION : Monitor collection process\nEnsure donor safety\nTrack collection volume
+
+note over SAMPLE_TESTING : Verify blood quality\nCheck safety standards\nIdentify contaminants
+
+note over DONATION_PROCESSING : Generate unique batch\nLink all components\nSet processing status
+
+note over INVENTORY_UPDATE : Calculate expiry dates\nUpdate stock levels\nMaintain traceability
+
+note over DONATION_TRACKING : Monitor progress\nTrack inventory\nMaintain audit trail
+
+@enduml

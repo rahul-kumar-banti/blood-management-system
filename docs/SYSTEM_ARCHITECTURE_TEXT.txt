@@ -1,0 +1,168 @@
+================================================================================
+                    BLOOD BANK MANAGEMENT SYSTEM - SYSTEM ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           PRESENTATION TIER (CLIENT)                           │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Java Swing Client                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • BloodBankSwingClient (Main Application Window)                      │   │
+│  │ • UserDialog (User Management Interface)                              │   │
+│  │ • BloodInventoryDialog (Inventory Management)                         │   │
+│  │ • DonationDialog (Donation Processing)                                │   │
+│  │ • RequestDialog (Blood Request Processing)                            │   │
+│  │ • UserTableModel & BloodInventoryTableModel (Data Display)            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                      Client Services                                   │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • UserService (Client-side user operations)                           │   │
+│  │ • BloodInventoryService (Client-side inventory operations)            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        │ HTTPS REST API + JWT Tokens
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        APPLICATION TIER (BACKEND)                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    Spring Boot Application                             │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • BloodBankApplication (Main Spring Boot App)                         │   │
+│  │ • Server Port: 8080                                                   │   │
+│  │ • Context Path: /api                                                  │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Controllers (REST API)                          │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • AuthController (/api/auth/*)                                         │   │
+│  │ • UserController (/api/users/*)                                        │   │
+│  │ • BloodInventoryController (/api/inventory/*)                          │   │
+│  │ • HealthController (/api/health)                                       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Services (Business Logic)                       │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • AuthService (Authentication & Authorization)                         │   │
+│  │ • UserService (User Management)                                        │   │
+│  │ • BloodInventoryService (Inventory Management)                         │   │
+│  │ • JwtService (JWT Token Management)                                    │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    Security & Configuration                            │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • SecurityConfig (Spring Security Configuration)                       │   │
+│  │ • JwtAuthenticationFilter (JWT Token Validation)                      │   │
+│  │ • JWT Secret & Expiration Configuration                                │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Data Access Layer                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • UserRepository (User Data Access)                                    │   │
+│  │ • BloodInventoryRepository (Inventory Data Access)                     │   │
+│  │ • JPA/Hibernate ORM                                                    │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Domain Models                                   │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • User (User Entity with Role, BloodType, etc.)                       │   │
+│  │ • BloodInventory (Blood Stock Management)                             │   │
+│  │ • Donation (Blood Donation Records)                                    │   │
+│  │ • Request (Blood Request Records)                                      │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        │ JDBC/JPA Connection
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           DATA TIER (DATABASE)                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                      PostgreSQL Database                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • Database: bloodbank                                                  │   │
+│  │ • Host: localhost:5432                                                 │   │
+│  │ • Driver: org.postgresql.Driver                                        │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                           Schema & Tables                              │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • users (User accounts, roles, blood types)                            │   │
+│  │ • blood_inventory (Blood stock levels, status)                         │   │
+│  │ • donations (Donation records, status, dates)                          │   │
+│  │ • requests (Blood request records, priority, status)                    │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        Database Features                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • Constraints (Data integrity)                                         │   │
+│  │ • Indexes (Performance optimization)                                   │   │
+│  │ • Audit Fields (Created/Updated timestamps)                            │   │
+│  │ • Foreign Key Relationships                                            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        EXTERNAL CONFIGURATION                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                    application.properties                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │ • Database Configuration (URL, username, password)                     │   │
+│  │ • JWT Configuration (secret, expiration)                               │   │
+│  │ • Server Configuration (port, context-path)                            │   │
+│  │ • JPA Configuration (Hibernate settings)                               │   │
+│  │ • Logging Configuration (debug levels)                                 │   │
+│  │ • Validation Configuration (enabled)                                    │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                              COMMUNICATION FLOW
+================================================================================
+
+1. CLIENT → BACKEND: Java Swing client makes HTTPS REST API calls
+2. AUTHENTICATION: JWT Bearer tokens for secure communication
+3. BACKEND → DATABASE: Spring Data JPA handles database operations
+4. RESPONSE: JSON responses sent back to client for UI updates
+
+================================================================================
+                              SECURITY FEATURES
+================================================================================
+
+• JWT-based Authentication
+• HTTPS Communication
+• Role-based Access Control
+• Password Encryption
+• Session Management
+• Input Validation
+
+================================================================================
+                              TECHNOLOGIES USED
+================================================================================
+
+• Frontend: Java Swing
+• Backend: Spring Boot 3.2.0, Spring Security, Spring Data JPA
+• Database: PostgreSQL
+• Authentication: JWT (JSON Web Tokens)
+• Build Tool: Maven
+• Java Version: 17

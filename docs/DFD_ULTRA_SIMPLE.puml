@@ -1,0 +1,60 @@
+@startuml
+title Blood Bank Management System - Simple DFD
+
+' External entities
+rectangle "Admin Users" as ADMIN
+rectangle "Staff Users" as STAFF
+rectangle "Donors" as DONORS
+rectangle "Patients" as PATIENTS
+rectangle "Hospitals" as HOSPITALS
+
+' Main processes
+rectangle "User Management" as USER_PROCESS
+rectangle "Authentication" as AUTH_PROCESS
+rectangle "Blood Donation" as DONATION_PROCESS
+rectangle "Blood Inventory" as INVENTORY_PROCESS
+rectangle "Blood Requests" as REQUEST_PROCESS
+
+' Data stores
+rectangle "Users Database" as USER_DB
+rectangle "Blood Inventory DB" as INVENTORY_DB
+rectangle "Donations DB" as DONATION_DB
+rectangle "Requests DB" as REQUEST_DB
+
+' Data flows
+ADMIN --> USER_PROCESS : User management requests
+USER_PROCESS --> USER_DB : Store user data
+USER_DB --> USER_PROCESS : Retrieve user data
+USER_PROCESS --> ADMIN : User management responses
+
+STAFF --> AUTH_PROCESS : Login credentials
+AUTH_PROCESS --> USER_DB : Validate credentials
+USER_DB --> AUTH_PROCESS : User authentication data
+AUTH_PROCESS --> STAFF : Authentication response
+
+DONORS --> AUTH_PROCESS : Login credentials
+AUTH_PROCESS --> DONORS : Authentication response
+
+PATIENTS --> AUTH_PROCESS : Login credentials
+AUTH_PROCESS --> PATIENTS : Authentication response
+
+STAFF --> DONATION_PROCESS : Donation data
+DONATION_PROCESS --> DONATION_DB : Store donation records
+DONATION_DB --> DONATION_PROCESS : Donation history
+DONATION_PROCESS --> INVENTORY_PROCESS : New blood stock
+DONATION_PROCESS --> STAFF : Donation confirmation
+
+INVENTORY_PROCESS --> INVENTORY_DB : Update inventory
+INVENTORY_DB --> INVENTORY_PROCESS : Current stock levels
+INVENTORY_PROCESS --> STAFF : Inventory information
+
+PATIENTS --> REQUEST_PROCESS : Blood requests
+HOSPITALS --> REQUEST_PROCESS : Emergency requests
+REQUEST_PROCESS --> REQUEST_DB : Store blood requests
+REQUEST_DB --> REQUEST_PROCESS : Request status
+REQUEST_PROCESS --> INVENTORY_PROCESS : Check availability
+INVENTORY_PROCESS --> REQUEST_PROCESS : Availability status
+REQUEST_PROCESS --> PATIENTS : Request confirmation
+REQUEST_PROCESS --> HOSPITALS : Request status updates
+
+@enduml

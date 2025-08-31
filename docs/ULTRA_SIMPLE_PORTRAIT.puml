@@ -1,0 +1,50 @@
+@startuml Blood Bank Management System - Ultra Simple
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+
+title Blood Bank Management System - Ultra Simple Architecture
+
+' Presentation Tier
+package "Presentation Tier" as PRESENTATION {
+    component "Java Swing Client" as CLIENT
+    component "Client Services" as CLIENT_SERVICES
+}
+
+' Application Tier
+package "Application Tier" as APPLICATION {
+    component "Spring Boot App" as SPRING_APP
+    component "Controllers" as CONTROLLERS
+    component "Services" as SERVICES
+    component "Repositories" as REPOSITORIES
+    component "Security" as SECURITY
+    component "DTOs" as DTOS
+    component "Entities" as ENTITIES
+}
+
+' Data Tier
+package "Data Tier" as DATA {
+    database "PostgreSQL" as DB
+    component "Tables" as TABLES
+    component "Constraints" as CONSTRAINTS
+}
+
+' External
+component "Configuration" as CONFIG
+component "Communication" as COMM
+
+' Relationships
+CLIENT --> CLIENT_SERVICES
+CLIENT_SERVICES --> COMM
+COMM --> CONTROLLERS
+CONTROLLERS --> SERVICES
+SERVICES --> REPOSITORIES
+REPOSITORIES --> DB
+SERVICES --> ENTITIES
+SERVICES --> DTOS
+SECURITY --> COMM
+SPRING_APP --> CONFIG
+DB --> TABLES
+DB --> CONSTRAINTS
+
+@enduml

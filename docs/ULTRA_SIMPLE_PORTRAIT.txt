@@ -1,0 +1,104 @@
+================================================================================
+                    BLOOD BANK MANAGEMENT SYSTEM
+                           ULTRA SIMPLE VIEW
+================================================================================
+
+                                    [Java Swing Client]
+                                           │
+                                           │ HTTP REST API
+                                           ▼
+                                    [Spring Boot Backend]
+                                           │
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+            [Controllers]            [Services]            [Security]
+                    │                      │                      │
+                    │                      │                      │
+            ┌───────┴───────┐      ┌───────┴───────┐      ┌───────┴───────┐
+            │                │      │                │      │                │
+            ▼                ▼      ▼                ▼      ▼                ▼
+    [AuthController]  [UserController]  [AuthService]  [UserService]  [SecurityConfig]  [JwtFilter]
+            │                │              │              │              │              │
+            │                │              │              │              │              │
+            └────────────────┼──────────────┼──────────────┼──────────────┼──────────────┘
+                             │              │              │              │
+                             ▼              ▼              ▼              ▼
+                    [Repositories]    [Entities]    [DTOs]        [JWT Service]
+                             │              │              │              │
+                             │              │              │              │
+                    ┌─────────┴─────────┐  │              │              │
+                    │                   │  │              │              │
+                    ▼                   ▼  ▼              ▼              ▼
+            [UserRepository]  [InventoryRepo]  [User]  [AuthRequest]  [JWT Tokens]
+                    │                   │      │      [UserRequest]        │
+                    │                   │      │      [PasswordRequest]   │
+                    └───────────────────┼──────┴──────────────────────────┘
+                                       │
+                                       ▼
+                              [PostgreSQL Database]
+                                       │
+                                       │
+                              ┌───────┴───────┐
+                              │               │
+                              ▼               ▼
+                        [users table]  [inventory table]
+                              │               │
+                              ▼               ▼
+                        [donations table]  [requests table]
+
+================================================================================
+                              THREE TIERS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           PRESENTATION TIER                                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                    Java Swing Client Application                               │
+│                    • User Interface Components                                 │
+│                    • Client-side Services                                      │
+│                    • Data Display Models                                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           APPLICATION TIER                                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                    Spring Boot Backend                                         │
+│                    • REST API Controllers                                      │
+│                    • Business Logic Services                                   │
+│                    • Data Access Repositories                                  │
+│                    • Security & Authentication                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                             DATA TIER                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                    PostgreSQL Database                                          │
+│                    • User Management Tables                                    │
+│                    • Blood Inventory Tables                                    │
+│                    • Donation & Request Records                                │
+│                    • Constraints & Audit Fields                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                              COMMUNICATION
+================================================================================
+
+• Client ↔ Backend: HTTPS REST API (Port 8080)
+• Authentication: JWT Bearer Tokens
+• Data Format: JSON
+• Database: JDBC/JPA Connection
+
+================================================================================
+                              KEY FEATURES
+================================================================================
+
+✅ JWT Authentication
+✅ Role-based Access Control
+✅ RESTful API Design
+✅ Three-tier Architecture
+✅ Secure Communication
+✅ External Configuration
+✅ Audit & Logging
+✅ Data Validation

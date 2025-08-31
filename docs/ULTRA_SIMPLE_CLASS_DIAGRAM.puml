@@ -1,0 +1,62 @@
+@startuml Blood Bank Management System - Ultra Simple Class Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+
+title Blood Bank Management System - Essential Classes
+
+' Core Classes
+class User {
+    -id
+    -username
+    -email
+    -password
+    -firstName
+    -lastName
+    -role
+    -bloodType
+}
+
+class BloodInventory {
+    -id
+    -bloodType
+    -quantity
+    -expiryDate
+    -status
+}
+
+class Donation {
+    -id
+    -donor
+    -bloodType
+    -quantity
+    -status
+}
+
+class Request {
+    -id
+    -requester
+    -bloodType
+    -quantity
+    -priority
+    -status
+}
+
+' Enums
+enum Role {
+    ADMIN
+    STAFF
+    DONOR
+    PATIENT
+}
+
+enum BloodType {
+    A+, A-, B+, B-
+    AB+, AB-, O+, O-
+}
+
+' Relationships
+User ||--o{ Donation
+User ||--o{ Request
+User ||--o{ BloodInventory
+
+@enduml
