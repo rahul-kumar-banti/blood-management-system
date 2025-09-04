@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: bloodbank-postgres
+    environment:
+      POSTGRES_DB: bloodbank
+      POSTGRES_USER: bloodbank
+      POSTGRES_PASSWORD: secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bloodbank-network
+    restart: unless-stopped
+
+  # Blood Bank Application
+  bloodbank-app:
+    build: .
+    container_name: bloodbank-app
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/bloodbank
+      DATABASE_USERNAME: bloodbank
+      DATABASE_PASSWORD: secure_password
+      JWT_SECRET: ZmQ0ZGI5NjQ0MDQwY2I4MjUxY2YwZmQ3OGNhYzRkNTZmZDRkYjk2NDQwNDBjYjgyNTFjZjBmZDc4Y2FjNGQ1Ng==
+      SERVER_PORT: 8080
+      CONTEXT_PATH: /api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - bloodbank-network
+    restart: unless-stopped
+    volumes:
+      - app_logs:/app/logs
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: bloodbank-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - bloodbank-app
+    networks:
+      - bloodbank-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  app_logs:
+
+networks:
+  bloodbank-network:
+    driver: bridge

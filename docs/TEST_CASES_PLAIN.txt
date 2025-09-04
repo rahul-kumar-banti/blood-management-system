@@ -1,0 +1,1033 @@
+BLOOD BANK MANAGEMENT SYSTEM - TEST CASES
+
+TABLE OF CONTENTS
+1. Unit Tests
+2. Integration Tests
+3. Controller Tests
+4. Service Tests
+5. Repository Tests
+6. Swing Client Tests
+7. Database Tests
+8. API Tests
+9. Security Tests
+10. Performance Tests
+
+UNIT TESTS
+
+User Entity Tests
+@Test
+public void testUserCreation() {
+    User user = new User();
+    user.setUsername("testuser");
+    user.setEmail("test@email.com");
+    user.setPassword("password123");
+    user.setFirstName("John");
+    user.setLastName("Doe");
+    user.setRole(User.Role.DONOR);
+    user.setBloodType(User.BloodType.O_POSITIVE);
+    
+    assertNotNull(user);
+    assertEquals("testuser", user.getUsername());
+    assertEquals("test@email.com", user.getEmail());
+    assertEquals(User.Role.DONOR, user.getRole());
+}
+
+@Test
+public void testUserValidation() {
+    User user = new User();
+    user.setUsername("ab");
+    user.setEmail("invalid-email");
+    user.setPassword("123");
+    
+    Set<ConstraintViolation<User>> violations = validator.validate(user);
+    assertFalse(violations.isEmpty());
+    assertEquals(3, violations.size());
+}
+
+Blood Inventory Tests
+@Test
+public void testBloodInventoryCreation() {
+    BloodInventory inventory = new BloodInventory();
+    inventory.setBloodType(User.BloodType.A_POSITIVE);
+    inventory.setQuantity(500);
+    inventory.setUnitOfMeasure("ml");
+    inventory.setStatus(BloodInventory.Status.AVAILABLE);
+    
+    assertNotNull(inventory);
+    assertEquals(User.BloodType.A_POSITIVE, inventory.getBloodType());
+    assertEquals(Integer.valueOf(500), inventory.getQuantity());
+}
+
+@Test
+public void testBloodInventoryValidation() {
+    BloodInventory inventory = new BloodInventory();
+    inventory.setQuantity(-100);
+    
+    Set<ConstraintViolation<BloodInventory>> violations = validator.validate(inventory);
+    assertFalse(violations.isEmpty());
+}
+
+Request Entity Tests
+@Test
+public void testRequestCreation() {
+    Request request = new Request();
+    request.setHospitalName("City Hospital");
+    request.setPatientName("John Doe");
+    request.setBloodType(User.BloodType.O_POSITIVE);
+    request.setQuantity(2);
+    request.setPriority(Request.Priority.HIGH);
+    request.setStatus(Request.RequestStatus.PENDING);
+    
+    assertNotNull(request);
+    assertEquals("City Hospital", request.getHospitalName());
+    assertEquals(Request.Priority.HIGH, request.getPriority());
+}
+
+INTEGRATION TESTS
+
+User Service Integration Tests
+@SpringBootTest
+@Transactional
+public class UserServiceIntegrationTest {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Test
+    public void testCreateUser() {
+        User user = new User();
+        user.setUsername("integrationtest");
+        user.setEmail("integration@test.com");
+        user.setPassword("password123");
+        user.setFirstName("Integration");
+        user.setLastName("Test");
+        user.setRole(User.Role.DONOR);
+        
+        User saved = userService.createUser(user);
+        
+        assertNotNull(saved.getId());
+        assertEquals("integrationtest", saved.getUsername());
+        assertTrue(userRepository.existsByUsername("integrationtest"));
+    }
+    
+    @Test
+    public void testUpdateUser() {
+        User user = createTestUser();
+        User saved = userService.createUser(user);
+        
+        saved.setFirstName("Updated");
+        saved.setLastName("Name");
+        
+        User updated = userService.updateUser(saved.getId(), saved);
+        
+        assertEquals("Updated", updated.getFirstName());
+        assertEquals("Name", updated.getLastName());
+    }
+    
+    @Test
+    public void testDeleteUser() {
+        User user = createTestUser();
+        User saved = userService.createUser(user);
+        
+        userService.deleteUser(saved.getId());
+        
+        assertFalse(userRepository.existsById(saved.getId()));
+    }
+}
+
+Blood Inventory Service Integration Tests
+@SpringBootTest
+@Transactional
+public class BloodInventoryServiceIntegrationTest {
+    
+    @Autowired
+    private BloodInventoryService bloodInventoryService;
+    
+    @Autowired
+    private BloodInventoryRepository bloodInventoryRepository;
+    
+    @Test
+    public void testAddBloodUnit() {
+        BloodInventory inventory = new BloodInventory();
+        inventory.setBloodType(User.BloodType.O_POSITIVE);
+        inventory.setQuantity(500);
+        inventory.setUnitOfMeasure("ml");
+        inventory.setStatus(BloodInventory.Status.AVAILABLE);
+        
+        BloodInventory saved = bloodInventoryService.addBloodUnit(inventory);
+        
+        assertNotNull(saved.getId());
+        assertEquals(User.BloodType.O_POSITIVE, saved.getBloodType());
+        assertTrue(bloodInventoryRepository.existsById(saved.getId()));
+    }
+    
+    @Test
+    public void testUpdateBloodUnit() {
+        BloodInventory inventory = createTestInventory();
+        BloodInventory saved = bloodInventoryService.addBloodUnit(inventory);
+        
+        saved.setQuantity(300);
+        saved.setStatus(BloodInventory.Status.RESERVED);
+        
+        BloodInventory updated = bloodInventoryService.updateBloodUnit(saved.getId(), saved);
+        
+        assertEquals(Integer.valueOf(300), updated.getQuantity());
+        assertEquals(BloodInventory.Status.RESERVED, updated.getStatus());
+    }
+    
+    @Test
+    public void testRemoveBloodUnit() {
+        BloodInventory inventory = createTestInventory();
+        inventory.setQuantity(500);
+        BloodInventory saved = bloodInventoryService.addBloodUnit(inventory);
+        
+        bloodInventoryService.removeBloodUnit(saved.getId(), 200);
+        
+        BloodInventory updated = bloodInventoryService.getBloodInventoryById(saved.getId());
+        assertEquals(Integer.valueOf(300), updated.getQuantity());
+    }
+}
+
+CONTROLLER TESTS
+
+User Controller Tests
+@WebMvcTest(UserController.class)
+public class UserControllerTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @MockBean
+    private UserService userService;
+    
+    @Test
+    public void testGetAllUsers() throws Exception {
+        List<User> users = Arrays.asList(createTestUser());
+        when(userService.getAllUsers()).thenReturn(users);
+        
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].username", is("testuser")));
+    }
+    
+    @Test
+    public void testCreateUser() throws Exception {
+        User user = createTestUser();
+        when(userService.createUser(any(User.class))).thenReturn(user);
+        
+        mockMvc.perform(post("/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username", is("testuser")));
+    }
+    
+    @Test
+    public void testCreateUserValidationError() throws Exception {
+        User user = new User();
+        user.setUsername("ab");
+        user.setEmail("invalid-email");
+        
+        mockMvc.perform(post("/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(user)))
+                .andExpect(status().isBadRequest());
+    }
+    
+    @Test
+    public void testUpdateUser() throws Exception {
+        User user = createTestUser();
+        user.setId(1L);
+        when(userService.updateUser(eq(1L), any(User.class))).thenReturn(user);
+        
+        mockMvc.perform(put("/users/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)));
+    }
+}
+
+Blood Inventory Controller Tests
+@WebMvcTest(BloodInventoryController.class)
+public class BloodInventoryControllerTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @MockBean
+    private BloodInventoryService bloodInventoryService;
+    
+    @Test
+    public void testGetAllInventory() throws Exception {
+        List<BloodInventory> inventory = Arrays.asList(createTestInventory());
+        when(bloodInventoryService.getAllBloodInventory()).thenReturn(inventory);
+        
+        mockMvc.perform(get("/inventory"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].bloodType", is("O_POSITIVE")));
+    }
+    
+    @Test
+    public void testAddBloodUnit() throws Exception {
+        BloodInventory inventory = createTestInventory();
+        when(bloodInventoryService.addBloodUnit(any(BloodInventory.class))).thenReturn(inventory);
+        
+        mockMvc.perform(post("/inventory/add")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(inventory)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bloodType", is("O_POSITIVE")));
+    }
+    
+    @Test
+    public void testGetInventoryByBloodType() throws Exception {
+        List<BloodInventory> inventory = Arrays.asList(createTestInventory());
+        when(bloodInventoryService.getBloodInventoryByType(User.BloodType.O_POSITIVE))
+                .thenReturn(inventory);
+        
+        mockMvc.perform(get("/inventory/type/O_POSITIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+}
+
+SERVICE TESTS
+
+User Service Tests
+@ExtendWith(MockitoExtension.class)
+public class UserServiceTest {
+    
+    @Mock
+    private UserRepository userRepository;
+    
+    @Mock
+    private PasswordEncoder passwordEncoder;
+    
+    @InjectMocks
+    private UserService userService;
+    
+    @Test
+    public void testCreateUser() {
+        User user = createTestUser();
+        when(userRepository.existsByUsername("testuser")).thenReturn(false);
+        when(userRepository.existsByEmail("test@email.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("encoded_password");
+        when(userRepository.save(any(User.class))).thenReturn(user);
+        
+        User result = userService.createUser(user);
+        
+        assertNotNull(result);
+        assertEquals("testuser", result.getUsername());
+        verify(userRepository).save(user);
+    }
+    
+    @Test
+    public void testCreateUserUsernameExists() {
+        User user = createTestUser();
+        when(userRepository.existsByUsername("testuser")).thenReturn(true);
+        
+        assertThrows(ValidationException.class, () -> userService.createUser(user));
+    }
+    
+    @Test
+    public void testCreateUserEmailExists() {
+        User user = createTestUser();
+        when(userRepository.existsByUsername("testuser")).thenReturn(false);
+        when(userRepository.existsByEmail("test@email.com")).thenReturn(true);
+        
+        assertThrows(ValidationException.class, () -> userService.createUser(user));
+    }
+    
+    @Test
+    public void testUpdateUser() {
+        User existingUser = createTestUser();
+        existingUser.setId(1L);
+        User updatedUser = createTestUser();
+        updatedUser.setFirstName("Updated");
+        
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
+        when(userRepository.existsByUsername("testuser")).thenReturn(false);
+        when(userRepository.existsByEmail("test@email.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenReturn(updatedUser);
+        
+        User result = userService.updateUser(1L, updatedUser);
+        
+        assertEquals("Updated", result.getFirstName());
+        verify(userRepository).save(any(User.class));
+    }
+}
+
+Blood Inventory Service Tests
+@ExtendWith(MockitoExtension.class)
+public class BloodInventoryServiceTest {
+    
+    @Mock
+    private BloodInventoryRepository bloodInventoryRepository;
+    
+    @InjectMocks
+    private BloodInventoryService bloodInventoryService;
+    
+    @Test
+    public void testAddBloodUnit() {
+        BloodInventory inventory = createTestInventory();
+        when(bloodInventoryRepository.save(any(BloodInventory.class))).thenReturn(inventory);
+        
+        BloodInventory result = bloodInventoryService.addBloodUnit(inventory);
+        
+        assertNotNull(result);
+        assertEquals(User.BloodType.O_POSITIVE, result.getBloodType());
+        verify(bloodInventoryRepository).save(inventory);
+    }
+    
+    @Test
+    public void testUpdateBloodUnit() {
+        BloodInventory existing = createTestInventory();
+        existing.setId(1L);
+        BloodInventory updated = createTestInventory();
+        updated.setQuantity(300);
+        
+        when(bloodInventoryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(bloodInventoryRepository.save(any(BloodInventory.class))).thenReturn(updated);
+        
+        BloodInventory result = bloodInventoryService.updateBloodUnit(1L, updated);
+        
+        assertEquals(Integer.valueOf(300), result.getQuantity());
+        verify(bloodInventoryRepository).save(existing);
+    }
+    
+    @Test
+    public void testRemoveBloodUnit() {
+        BloodInventory inventory = createTestInventory();
+        inventory.setId(1L);
+        inventory.setQuantity(500);
+        
+        when(bloodInventoryRepository.findById(1L)).thenReturn(Optional.of(inventory));
+        when(bloodInventoryRepository.save(any(BloodInventory.class))).thenReturn(inventory);
+        
+        bloodInventoryService.removeBloodUnit(1L, 200);
+        
+        assertEquals(Integer.valueOf(300), inventory.getQuantity());
+        verify(bloodInventoryRepository).save(inventory);
+    }
+    
+    @Test
+    public void testRemoveBloodUnitInsufficientQuantity() {
+        BloodInventory inventory = createTestInventory();
+        inventory.setId(1L);
+        inventory.setQuantity(100);
+        
+        when(bloodInventoryRepository.findById(1L)).thenReturn(Optional.of(inventory));
+        
+        assertThrows(RuntimeException.class, () -> bloodInventoryService.removeBloodUnit(1L, 200));
+    }
+}
+
+REPOSITORY TESTS
+
+User Repository Tests
+@DataJpaTest
+public class UserRepositoryTest {
+    
+    @Autowired
+    private TestEntityManager entityManager;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Test
+    public void testFindByUsername() {
+        User user = createTestUser();
+        entityManager.persistAndFlush(user);
+        
+        Optional<User> found = userRepository.findByUsername("testuser");
+        
+        assertTrue(found.isPresent());
+        assertEquals("testuser", found.get().getUsername());
+    }
+    
+    @Test
+    public void testFindByEmail() {
+        User user = createTestUser();
+        entityManager.persistAndFlush(user);
+        
+        Optional<User> found = userRepository.findByEmail("test@email.com");
+        
+        assertTrue(found.isPresent());
+        assertEquals("test@email.com", found.get().getEmail());
+    }
+    
+    @Test
+    public void testFindByRole() {
+        User donor = createTestUser();
+        donor.setRole(User.Role.DONOR);
+        entityManager.persistAndFlush(donor);
+        
+        User admin = createTestUser();
+        admin.setUsername("admin");
+        admin.setEmail("admin@email.com");
+        admin.setRole(User.Role.ADMIN);
+        entityManager.persistAndFlush(admin);
+        
+        List<User> donors = userRepository.findByRole(User.Role.DONOR);
+        
+        assertEquals(1, donors.size());
+        assertEquals(User.Role.DONOR, donors.get(0).getRole());
+    }
+    
+    @Test
+    public void testExistsByUsername() {
+        User user = createTestUser();
+        entityManager.persistAndFlush(user);
+        
+        boolean exists = userRepository.existsByUsername("testuser");
+        
+        assertTrue(exists);
+    }
+    
+    @Test
+    public void testExistsByEmail() {
+        User user = createTestUser();
+        entityManager.persistAndFlush(user);
+        
+        boolean exists = userRepository.existsByEmail("test@email.com");
+        
+        assertTrue(exists);
+    }
+}
+
+Blood Inventory Repository Tests
+@DataJpaTest
+public class BloodInventoryRepositoryTest {
+    
+    @Autowired
+    private TestEntityManager entityManager;
+    
+    @Autowired
+    private BloodInventoryRepository bloodInventoryRepository;
+    
+    @Test
+    public void testFindByBloodType() {
+        BloodInventory inventory1 = createTestInventory();
+        inventory1.setBloodType(User.BloodType.O_POSITIVE);
+        entityManager.persistAndFlush(inventory1);
+        
+        BloodInventory inventory2 = createTestInventory();
+        inventory2.setBloodType(User.BloodType.A_POSITIVE);
+        entityManager.persistAndFlush(inventory2);
+        
+        List<BloodInventory> oPositive = bloodInventoryRepository.findByBloodType(User.BloodType.O_POSITIVE);
+        
+        assertEquals(1, oPositive.size());
+        assertEquals(User.BloodType.O_POSITIVE, oPositive.get(0).getBloodType());
+    }
+    
+    @Test
+    public void testFindByStatus() {
+        BloodInventory inventory1 = createTestInventory();
+        inventory1.setStatus(BloodInventory.Status.AVAILABLE);
+        entityManager.persistAndFlush(inventory1);
+        
+        BloodInventory inventory2 = createTestInventory();
+        inventory2.setStatus(BloodInventory.Status.RESERVED);
+        entityManager.persistAndFlush(inventory2);
+        
+        List<BloodInventory> available = bloodInventoryRepository.findByStatus(BloodInventory.Status.AVAILABLE);
+        
+        assertEquals(1, available.size());
+        assertEquals(BloodInventory.Status.AVAILABLE, available.get(0).getStatus());
+    }
+    
+    @Test
+    public void testFindAvailableInventory() {
+        BloodInventory available = createTestInventory();
+        available.setStatus(BloodInventory.Status.AVAILABLE);
+        available.setExpiryDate(LocalDateTime.now().plusDays(30));
+        entityManager.persistAndFlush(available);
+        
+        BloodInventory expired = createTestInventory();
+        expired.setStatus(BloodInventory.Status.AVAILABLE);
+        expired.setExpiryDate(LocalDateTime.now().minusDays(1));
+        entityManager.persistAndFlush(expired);
+        
+        List<BloodInventory> result = bloodInventoryRepository.findAvailableInventory(LocalDateTime.now());
+        
+        assertEquals(1, result.size());
+        assertEquals(BloodInventory.Status.AVAILABLE, result.get(0).getStatus());
+    }
+}
+
+SWING CLIENT TESTS
+
+User Dialog Tests
+public class UserDialogTest {
+    
+    @Test
+    public void testUserDialogCreation() {
+        JFrame parent = new JFrame();
+        UserDialog dialog = new UserDialog(parent, null, false);
+        
+        assertNotNull(dialog);
+        assertTrue(dialog.isModal());
+    }
+    
+    @Test
+    public void testUserDialogWithUser() {
+        JFrame parent = new JFrame();
+        User user = createTestUser();
+        UserDialog dialog = new UserDialog(parent, user, true);
+        
+        assertNotNull(dialog);
+        assertTrue(dialog.isModal());
+    }
+    
+    @Test
+    public void testValidationEmptyUsername() {
+        UserDialog dialog = new UserDialog(new JFrame(), null, false);
+        dialog.usernameField.setText("");
+        dialog.emailField.setText("test@email.com");
+        dialog.passwordField.setText("password123");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationInvalidEmail() {
+        UserDialog dialog = new UserDialog(new JFrame(), null, false);
+        dialog.usernameField.setText("testuser");
+        dialog.emailField.setText("invalid-email");
+        dialog.passwordField.setText("password123");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationShortPassword() {
+        UserDialog dialog = new UserDialog(new JFrame(), null, false);
+        dialog.usernameField.setText("testuser");
+        dialog.emailField.setText("test@email.com");
+        dialog.passwordField.setText("123");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationValidInput() {
+        UserDialog dialog = new UserDialog(new JFrame(), null, false);
+        dialog.usernameField.setText("testuser");
+        dialog.emailField.setText("test@email.com");
+        dialog.passwordField.setText("password123");
+        dialog.firstNameField.setText("John");
+        dialog.lastNameField.setText("Doe");
+        
+        assertTrue(dialog.validateInput());
+    }
+}
+
+Blood Inventory Dialog Tests
+public class BloodInventoryDialogTest {
+    
+    @Test
+    public void testBloodInventoryDialogCreation() {
+        JFrame parent = new JFrame();
+        BloodInventoryDialog dialog = new BloodInventoryDialog(parent, null, false);
+        
+        assertNotNull(dialog);
+        assertTrue(dialog.isModal());
+    }
+    
+    @Test
+    public void testValidationEmptyBloodType() {
+        BloodInventoryDialog dialog = new BloodInventoryDialog(new JFrame(), null, false);
+        dialog.bloodTypeComboBox.setSelectedItem(null);
+        dialog.quantityField.setText("500");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationNegativeQuantity() {
+        BloodInventoryDialog dialog = new BloodInventoryDialog(new JFrame(), null, false);
+        dialog.bloodTypeComboBox.setSelectedItem("O_POSITIVE");
+        dialog.quantityField.setText("-100");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationInvalidQuantity() {
+        BloodInventoryDialog dialog = new BloodInventoryDialog(new JFrame(), null, false);
+        dialog.bloodTypeComboBox.setSelectedItem("O_POSITIVE");
+        dialog.quantityField.setText("invalid");
+        
+        assertFalse(dialog.validateInput());
+    }
+    
+    @Test
+    public void testValidationValidInput() {
+        BloodInventoryDialog dialog = new BloodInventoryDialog(new JFrame(), null, false);
+        dialog.bloodTypeComboBox.setSelectedItem("O_POSITIVE");
+        dialog.quantityField.setText("500");
+        dialog.unitComboBox.setSelectedItem("ml");
+        
+        assertTrue(dialog.validateInput());
+    }
+}
+
+DATABASE TESTS
+
+Database Connection Tests
+@SpringBootTest
+public class DatabaseConnectionTest {
+    
+    @Autowired
+    private DataSource dataSource;
+    
+    @Test
+    public void testDatabaseConnection() throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            assertNotNull(connection);
+            assertFalse(connection.isClosed());
+        }
+    }
+    
+    @Test
+    public void testDatabaseSchema() throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet tables = metaData.getTables(null, null, "users", null);
+            
+            assertTrue(tables.next());
+            assertEquals("users", tables.getString("TABLE_NAME"));
+        }
+    }
+}
+
+Database Transaction Tests
+@SpringBootTest
+@Transactional
+public class DatabaseTransactionTest {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Test
+    public void testTransactionRollback() {
+        User user = createTestUser();
+        user.setUsername("transaction_test");
+        
+        try {
+            userRepository.save(user);
+            userRepository.save(user); // This should fail due to unique constraint
+            fail("Expected exception not thrown");
+        } catch (Exception e) {
+            // Transaction should be rolled back
+            assertFalse(userRepository.existsByUsername("transaction_test"));
+        }
+    }
+    
+    @Test
+    @Transactional
+    public void testTransactionCommit() {
+        User user = createTestUser();
+        user.setUsername("commit_test");
+        
+        userRepository.save(user);
+        
+        assertTrue(userRepository.existsByUsername("commit_test"));
+    }
+}
+
+API TESTS
+
+REST API Integration Tests
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestDatabase
+public class RestApiIntegrationTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Test
+    public void testGetAllUsers() {
+        User user = createTestUser();
+        userRepository.save(user);
+        
+        ResponseEntity<List> response = restTemplate.getForEntity("/users", List.class);
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+    
+    @Test
+    public void testCreateUser() {
+        User user = createTestUser();
+        
+        ResponseEntity<User> response = restTemplate.postForEntity("/users", user, User.class);
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody().getId());
+    }
+    
+    @Test
+    public void testUpdateUser() {
+        User user = createTestUser();
+        User saved = userRepository.save(user);
+        saved.setFirstName("Updated");
+        
+        ResponseEntity<User> response = restTemplate.exchange(
+                "/users/" + saved.getId(),
+                HttpMethod.PUT,
+                new HttpEntity<>(saved),
+                User.class
+        );
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Updated", response.getBody().getFirstName());
+    }
+    
+    @Test
+    public void testDeleteUser() {
+        User user = createTestUser();
+        User saved = userRepository.save(user);
+        
+        restTemplate.delete("/users/" + saved.getId());
+        
+        assertFalse(userRepository.existsById(saved.getId()));
+    }
+}
+
+API Error Handling Tests
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class ApiErrorHandlingTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    public void testUserNotFound() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/users/999", String.class);
+        
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
+    
+    @Test
+    public void testInvalidUserData() {
+        User user = new User();
+        user.setUsername("ab"); // Too short
+        user.setEmail("invalid-email"); // Invalid format
+        
+        ResponseEntity<String> response = restTemplate.postForEntity("/users", user, String.class);
+        
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+}
+
+SECURITY TESTS
+
+Authentication Tests
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class AuthenticationTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    public void testUnauthenticatedAccess() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/users", String.class);
+        
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+    
+    @Test
+    public void testValidLogin() {
+        AuthRequest request = new AuthRequest("admin", "admin123");
+        
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
+                "/auth/login", request, AuthResponse.class);
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody().getToken());
+    }
+    
+    @Test
+    public void testInvalidLogin() {
+        AuthRequest request = new AuthRequest("admin", "wrongpassword");
+        
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "/auth/login", request, String.class);
+        
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+}
+
+Authorization Tests
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class AuthorizationTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    public void testAdminAccess() {
+        String token = getAuthToken("admin", "admin123");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        
+        ResponseEntity<List> response = restTemplate.exchange(
+                "/users",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                List.class
+        );
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+    
+    @Test
+    public void testDonorAccess() {
+        String token = getAuthToken("donor1", "donor123");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/users",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+        
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+    }
+}
+
+PERFORMANCE TESTS
+
+Load Testing
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class PerformanceTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    public void testConcurrentUserCreation() throws InterruptedException {
+        int numberOfThreads = 10;
+        int requestsPerThread = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
+        CountDownLatch latch = new CountDownLatch(numberOfThreads);
+        
+        for (int i = 0; i < numberOfThreads; i++) {
+            executor.submit(() -> {
+                try {
+                    for (int j = 0; j < requestsPerThread; j++) {
+                        User user = createTestUser();
+                        user.setUsername("perf_test_" + Thread.currentThread().getId() + "_" + j);
+                        user.setEmail("perf_test_" + Thread.currentThread().getId() + "_" + j + "@email.com");
+                        
+                        ResponseEntity<User> response = restTemplate.postForEntity("/users", user, User.class);
+                        assertEquals(HttpStatus.OK, response.getStatusCode());
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        latch.await(60, TimeUnit.SECONDS);
+        executor.shutdown();
+    }
+    
+    @Test
+    public void testDatabaseQueryPerformance() {
+        // Create test data
+        for (int i = 0; i < 1000; i++) {
+            User user = createTestUser();
+            user.setUsername("perf_user_" + i);
+            user.setEmail("perf_user_" + i + "@email.com");
+            restTemplate.postForEntity("/users", user, User.class);
+        }
+        
+        long startTime = System.currentTimeMillis();
+        
+        ResponseEntity<List> response = restTemplate.getForEntity("/users", List.class);
+        
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue("Query took too long: " + duration + "ms", duration < 5000);
+    }
+}
+
+Memory Usage Tests
+@Test
+public void testMemoryUsage() {
+    Runtime runtime = Runtime.getRuntime();
+    long initialMemory = runtime.totalMemory() - runtime.freeMemory();
+    
+    List<User> users = new ArrayList<>();
+    for (int i = 0; i < 10000; i++) {
+        User user = createTestUser();
+        user.setUsername("memory_test_" + i);
+        users.add(user);
+    }
+    
+    long finalMemory = runtime.totalMemory() - runtime.freeMemory();
+    long memoryUsed = finalMemory - initialMemory;
+    
+    assertTrue("Memory usage too high: " + memoryUsed + " bytes", memoryUsed < 100 * 1024 * 1024); // 100MB
+}
+
+HELPER METHODS
+
+private User createTestUser() {
+    User user = new User();
+    user.setUsername("testuser");
+    user.setEmail("test@email.com");
+    user.setPassword("password123");
+    user.setFirstName("John");
+    user.setLastName("Doe");
+    user.setRole(User.Role.DONOR);
+    user.setBloodType(User.BloodType.O_POSITIVE);
+    user.setActive(true);
+    return user;
+}
+
+private BloodInventory createTestInventory() {
+    BloodInventory inventory = new BloodInventory();
+    inventory.setBloodType(User.BloodType.O_POSITIVE);
+    inventory.setQuantity(500);
+    inventory.setUnitOfMeasure("ml");
+    inventory.setStatus(BloodInventory.Status.AVAILABLE);
+    inventory.setExpiryDate(LocalDateTime.now().plusDays(30));
+    return inventory;
+}
+
+private Request createTestRequest() {
+    Request request = new Request();
+    request.setHospitalName("Test Hospital");
+    request.setPatientName("Test Patient");
+    request.setBloodType(User.BloodType.O_POSITIVE);
+    request.setQuantity(2);
+    request.setUnitOfMeasure("units");
+    request.setRequestDate(LocalDateTime.now());
+    request.setRequiredDate(LocalDateTime.now().plusDays(1));
+    request.setPriority(Request.Priority.HIGH);
+    request.setStatus(Request.RequestStatus.PENDING);
+    return request;
+}
+
+private String getAuthToken(String username, String password) {
+    AuthRequest request = new AuthRequest(username, password);
+    ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/auth/login", request, AuthResponse.class);
+    return response.getBody().getToken();
+}

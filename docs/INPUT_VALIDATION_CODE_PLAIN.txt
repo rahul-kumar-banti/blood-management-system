@@ -1,0 +1,594 @@
+INPUT VALIDATION CODE SAMPLES
+
+Entity Validation Annotations
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @Column(unique = true, nullable = false)
+    private String username;
+    
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email should be valid")
+    @Column(unique = true, nullable = false)
+    private String email;
+    
+    @NotBlank(message = "Password is required")
+    @Size(min = 6, message = "Password must be at least 6 characters")
+    @Column(nullable = false)
+    private String password;
+    
+    @NotBlank(message = "First name is required")
+    @Size(max = 100, message = "First name cannot exceed 100 characters")
+    @Column(name = "first_name", nullable = false)
+    private String firstName;
+    
+    @NotBlank(message = "Last name is required")
+    @Size(max = 100, message = "Last name cannot exceed 100 characters")
+    @Column(name = "last_name", nullable = false)
+    private String lastName;
+    
+    @Pattern(regexp = "^[0-9]{10}$", message = "Phone number must be 10 digits")
+    @Column(name = "phone_number")
+    private String phoneNumber;
+    
+    @NotNull(message = "Role is required")
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role;
+    
+    @Enumerated(EnumType.STRING)
+    private BloodType bloodType;
+    
+    @AssertTrue(message = "User must be active")
+    private boolean isActive = true;
+}
+
+Blood Inventory Validation
+@Entity
+@Table(name = "blood_inventory")
+public class BloodInventory {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @NotNull(message = "Blood type is required")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "blood_type", nullable = false)
+    private User.BloodType bloodType;
+    
+    @Min(value = 0, message = "Quantity cannot be negative")
+    @Max(value = 10000, message = "Quantity cannot exceed 10000")
+    @Column(nullable = false)
+    private Integer quantity;
+    
+    @NotBlank(message = "Unit of measure is required")
+    @Pattern(regexp = "^(ml|units|pints)$", message = "Unit must be ml, units, or pints")
+    @Column(name = "unit_of_measure")
+    private String unitOfMeasure = "ml";
+    
+    @Future(message = "Expiry date must be in the future")
+    @Column(name = "expiry_date")
+    private LocalDateTime expiryDate;
+    
+    @Past(message = "Collection date must be in the past")
+    @Column(name = "collection_date")
+    private LocalDateTime collectionDate;
+    
+    @Size(max = 50, message = "Batch number cannot exceed 50 characters")
+    @Column(name = "batch_number")
+    private String batchNumber;
+    
+    @NotNull(message = "Status is required")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private Status status = Status.AVAILABLE;
+    
+    @Size(max = 500, message = "Notes cannot exceed 500 characters")
+    @Column(name = "notes")
+    private String notes;
+}
+
+Request Validation
+@Entity
+@Table(name = "requests")
+public class Request {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @NotNull(message = "Requester is required")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requester_id", nullable = false)
+    private User requester;
+    
+    @NotBlank(message = "Hospital name is required")
+    @Size(max = 255, message = "Hospital name cannot exceed 255 characters")
+    @Column(name = "hospital_name", nullable = false)
+    private String hospitalName;
+    
+    @NotBlank(message = "Patient name is required")
+    @Size(max = 255, message = "Patient name cannot exceed 255 characters")
+    @Column(name = "patient_name", nullable = false)
+    private String patientName;
+    
+    @NotNull(message = "Blood type is required")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "blood_type", nullable = false)
+    private BloodType bloodType;
+    
+    @Min(value = 1, message = "Quantity must be at least 1")
+    @Max(value = 1000, message = "Quantity cannot exceed 1000")
+    @Column(name = "quantity", nullable = false)
+    private Integer quantity;
+    
+    @NotBlank(message = "Unit of measure is required")
+    @Pattern(regexp = "^(ml|units|pints)$", message = "Unit must be ml, units, or pints")
+    @Column(name = "unit_of_measure", nullable = false)
+    private String unitOfMeasure;
+    
+    @NotNull(message = "Request date is required")
+    @Column(name = "request_date", nullable = false)
+    private LocalDateTime requestDate;
+    
+    @NotNull(message = "Required date is required")
+    @Future(message = "Required date must be in the future")
+    @Column(name = "required_date", nullable = false)
+    private LocalDateTime requiredDate;
+    
+    @NotNull(message = "Priority is required")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false)
+    private Priority priority;
+    
+    @NotNull(message = "Status is required")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private RequestStatus status;
+    
+    @Size(max = 1000, message = "Reason cannot exceed 1000 characters")
+    @Column(name = "reason")
+    private String reason;
+    
+    @Size(max = 255, message = "Doctor name cannot exceed 255 characters")
+    @Column(name = "doctor_name")
+    private String doctorName;
+    
+    @Pattern(regexp = "^[+]?[0-9]{10,15}$", message = "Contact number must be 10-15 digits")
+    @Column(name = "contact_number")
+    private String contactNumber;
+    
+    @Size(max = 1000, message = "Notes cannot exceed 1000 characters")
+    @Column(name = "notes")
+    private String notes;
+    
+    @AssertTrue(message = "Required date must be after request date")
+    public boolean isRequiredDateAfterRequestDate() {
+        if (requestDate == null || requiredDate == null) {
+            return true;
+        }
+        return requiredDate.isAfter(requestDate);
+    }
+}
+
+Controller Validation
+@RestController
+@RequestMapping("/users")
+@Validated
+public class UserController {
+    
+    @PostMapping
+    public ResponseEntity<?> createUser(@Valid @RequestBody User user, BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(getValidationErrors(bindingResult));
+        }
+        
+        try {
+            User created = userService.createUser(user);
+            return ResponseEntity.ok(created);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error creating user: " + e.getMessage());
+        }
+    }
+    
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody User user, BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(getValidationErrors(bindingResult));
+        }
+        
+        try {
+            User updated = userService.updateUser(id, user);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error updating user: " + e.getMessage());
+        }
+    }
+    
+    private Map<String, String> getValidationErrors(BindingResult bindingResult) {
+        Map<String, String> errors = new HashMap<>();
+        for (FieldError error : bindingResult.getFieldErrors()) {
+            errors.put(error.getField(), error.getDefaultMessage());
+        }
+        return errors;
+    }
+}
+
+Service Layer Validation
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    
+    public User createUser(User user) {
+        validateUser(user);
+        
+        if (userRepository.existsByUsername(user.getUsername())) {
+            throw new ValidationException("Username already exists");
+        }
+        
+        if (userRepository.existsByEmail(user.getEmail())) {
+            throw new ValidationException("Email already exists");
+        }
+        
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userRepository.save(user);
+    }
+    
+    public User updateUser(Long id, User userDetails) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ValidationException("User not found"));
+        
+        validateUser(userDetails);
+        
+        if (!user.getUsername().equals(userDetails.getUsername()) && 
+            userRepository.existsByUsername(userDetails.getUsername())) {
+            throw new ValidationException("Username already exists");
+        }
+        
+        if (!user.getEmail().equals(userDetails.getEmail()) && 
+            userRepository.existsByEmail(userDetails.getEmail())) {
+            throw new ValidationException("Email already exists");
+        }
+        
+        user.setFirstName(userDetails.getFirstName());
+        user.setLastName(userDetails.getLastName());
+        user.setEmail(userDetails.getEmail());
+        user.setPhoneNumber(userDetails.getPhoneNumber());
+        user.setBloodType(userDetails.getBloodType());
+        user.setRole(userDetails.getRole());
+        
+        return userRepository.save(user);
+    }
+    
+    private void validateUser(User user) {
+        if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
+            throw new ValidationException("Username is required");
+        }
+        
+        if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+            throw new ValidationException("Email is required");
+        }
+        
+        if (!isValidEmail(user.getEmail())) {
+            throw new ValidationException("Invalid email format");
+        }
+        
+        if (user.getPassword() == null || user.getPassword().length() < 6) {
+            throw new ValidationException("Password must be at least 6 characters");
+        }
+    }
+    
+    private boolean isValidEmail(String email) {
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        Pattern pattern = Pattern.compile(emailRegex);
+        return pattern.matcher(email).matches();
+    }
+}
+
+Swing Client Validation
+public class UserDialog extends JDialog {
+    
+    private boolean validateInput() {
+        // Username validation
+        if (usernameField.getText().trim().isEmpty()) {
+            showError("Username is required");
+            return false;
+        }
+        
+        if (usernameField.getText().length() < 3 || usernameField.getText().length() > 50) {
+            showError("Username must be between 3 and 50 characters");
+            return false;
+        }
+        
+        // Email validation
+        if (emailField.getText().trim().isEmpty()) {
+            showError("Email is required");
+            return false;
+        }
+        
+        if (!isValidEmail(emailField.getText().trim())) {
+            showError("Invalid email format");
+            return false;
+        }
+        
+        // Password validation
+        if (passwordField.getPassword().length < 6) {
+            showError("Password must be at least 6 characters");
+            return false;
+        }
+        
+        // First name validation
+        if (firstNameField.getText().trim().isEmpty()) {
+            showError("First name is required");
+            return false;
+        }
+        
+        // Last name validation
+        if (lastNameField.getText().trim().isEmpty()) {
+            showError("Last name is required");
+            return false;
+        }
+        
+        // Phone number validation
+        if (!phoneField.getText().trim().isEmpty()) {
+            if (!phoneField.getText().matches("^[0-9]{10}$")) {
+                showError("Phone number must be 10 digits");
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    private boolean isValidEmail(String email) {
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        return email.matches(emailRegex);
+    }
+    
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(this, message, "Validation Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
+Blood Inventory Validation
+public class BloodInventoryDialog extends JDialog {
+    
+    private boolean validateInput() {
+        // Blood type validation
+        if (bloodTypeComboBox.getSelectedItem() == null) {
+            showError("Blood type is required");
+            return false;
+        }
+        
+        // Quantity validation
+        try {
+            int quantity = Integer.parseInt(quantityField.getText().trim());
+            if (quantity < 0) {
+                showError("Quantity cannot be negative");
+                return false;
+            }
+            if (quantity > 10000) {
+                showError("Quantity cannot exceed 10000");
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            showError("Please enter a valid quantity number");
+            return false;
+        }
+        
+        // Unit validation
+        if (unitComboBox.getSelectedItem() == null) {
+            showError("Unit of measure is required");
+            return false;
+        }
+        
+        // Expiry date validation
+        if (expiryDateField.getText() != null && !expiryDateField.getText().trim().isEmpty()) {
+            try {
+                LocalDate expiryDate = LocalDate.parse(expiryDateField.getText());
+                if (expiryDate.isBefore(LocalDate.now())) {
+                    showError("Expiry date must be in the future");
+                    return false;
+                }
+            } catch (DateTimeParseException e) {
+                showError("Please enter expiry date in YYYY-MM-DD format");
+                return false;
+            }
+        }
+        
+        // Collection date validation
+        if (collectionDateField.getText() != null && !collectionDateField.getText().trim().isEmpty()) {
+            try {
+                LocalDate collectionDate = LocalDate.parse(collectionDateField.getText());
+                if (collectionDate.isAfter(LocalDate.now())) {
+                    showError("Collection date must be in the past");
+                    return false;
+                }
+            } catch (DateTimeParseException e) {
+                showError("Please enter collection date in YYYY-MM-DD format");
+                return false;
+            }
+        }
+        
+        return true;
+    }
+}
+
+Request Validation
+public class RequestDialog extends JDialog {
+    
+    private boolean validateInput() {
+        // Hospital validation
+        if (hospitalField.getText().trim().isEmpty()) {
+            showError("Hospital name is required");
+            return false;
+        }
+        
+        // Patient validation
+        if (patientField.getText().trim().isEmpty()) {
+            showError("Patient name is required");
+            return false;
+        }
+        
+        // Blood type validation
+        if (bloodTypeComboBox.getSelectedItem() == null) {
+            showError("Blood type is required");
+            return false;
+        }
+        
+        // Quantity validation
+        try {
+            int quantity = Integer.parseInt(quantityField.getText().trim());
+            if (quantity < 1) {
+                showError("Quantity must be at least 1");
+                return false;
+            }
+            if (quantity > 1000) {
+                showError("Quantity cannot exceed 1000");
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            showError("Please enter a valid quantity number");
+            return false;
+        }
+        
+        // Required date validation
+        try {
+            LocalDate requiredDate = LocalDate.parse(requiredDateField.getText());
+            if (requiredDate.isBefore(LocalDate.now())) {
+                showError("Required date must be in the future");
+                return false;
+            }
+        } catch (DateTimeParseException e) {
+            showError("Please enter required date in YYYY-MM-DD format");
+            return false;
+        }
+        
+        // Contact number validation
+        if (!contactField.getText().trim().isEmpty()) {
+            if (!contactField.getText().matches("^[+]?[0-9]{10,15}$")) {
+                showError("Contact number must be 10-15 digits");
+                return false;
+            }
+        }
+        
+        return true;
+    }
+}
+
+Custom Validator
+@Target({ElementType.FIELD})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = BloodTypeValidator.class)
+public @interface ValidBloodType {
+    String message() default "Invalid blood type";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+public class BloodTypeValidator implements ConstraintValidator<ValidBloodType, String> {
+    private static final Set<String> VALID_BLOOD_TYPES = Set.of(
+        "A_POSITIVE", "A_NEGATIVE", "B_POSITIVE", "B_NEGATIVE",
+        "AB_POSITIVE", "AB_NEGATIVE", "O_POSITIVE", "O_NEGATIVE"
+    );
+    
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        return value == null || VALID_BLOOD_TYPES.contains(value);
+    }
+}
+
+Global Exception Handler
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        return ResponseEntity.badRequest().body(errors);
+    }
+    
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<String> handleValidationException(ValidationException ex) {
+        return ResponseEntity.badRequest().body(ex.getMessage());
+    }
+    
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, String>> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getConstraintViolations().forEach((violation) -> {
+            String fieldName = violation.getPropertyPath().toString();
+            String errorMessage = violation.getMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        return ResponseEntity.badRequest().body(errors);
+    }
+}
+
+Input Sanitization
+public class InputSanitizer {
+    
+    public static String sanitizeString(String input) {
+        if (input == null) return null;
+        return input.trim().replaceAll("[<>\"'&]", "");
+    }
+    
+    public static String sanitizeEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase();
+    }
+    
+    public static String sanitizePhoneNumber(String phone) {
+        if (phone == null) return null;
+        return phone.replaceAll("[^0-9+]", "");
+    }
+    
+    public static String sanitizeTextArea(String text) {
+        if (text == null) return null;
+        return text.trim().replaceAll("[<>\"'&]", "").replaceAll("\\s+", " ");
+    }
+}
+
+Password Validation
+public class PasswordValidator {
+    
+    public static boolean isValidPassword(String password) {
+        if (password == null || password.length() < 6) {
+            return false;
+        }
+        
+        // Check for at least one uppercase letter
+        if (!password.matches(".*[A-Z].*")) {
+            return false;
+        }
+        
+        // Check for at least one lowercase letter
+        if (!password.matches(".*[a-z].*")) {
+            return false;
+        }
+        
+        // Check for at least one digit
+        if (!password.matches(".*[0-9].*")) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    public static String getPasswordRequirements() {
+        return "Password must be at least 6 characters and contain at least one uppercase letter, one lowercase letter, and one digit";
+    }
+}

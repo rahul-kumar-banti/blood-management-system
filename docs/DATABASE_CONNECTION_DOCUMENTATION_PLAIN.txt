@@ -1,0 +1,629 @@
+
+
+1. Application Properties Configuration
+
+File: src/main/resources/application.properties
+
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/bloodbank
+spring.datasource.username=rahul
+spring.datasource.password=8004
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+
+# Server Configuration
+server.port=8080
+server.servlet.context-path=/api
+
+# JWT Configuration
+jwt.secret=ZmQ0ZGI5NjQ0MDQwY2I4MjUxY2YwZmQ3OGNhYzRkNTZmZDRkYjk2NDQwNDBjYjgyNTFjZjBmZDc4Y2FjNGQ1Ng==
+jwt.expiration=86400000
+
+# Logging Configuration
+logging.level.com.bloodbank=DEBUG
+logging.level.org.springframework.security=DEBUG
+
+# Validation Configuration
+spring.validation.enabled=true
+
+2. Environment-Specific Configurations
+
+Development Environment (application-dev.properties)
+
+# Development Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/bloodbank_dev
+spring.datasource.username=bloodbank_dev
+spring.datasource.password=dev_password
+
+# Development JPA Settings
+spring.jpa.hibernate.ddl-auto=create-drop
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+logging.level.org.hibernate.SQL=DEBUG
+logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+
+# Development Server Settings
+server.port=8080
+management.endpoints.web.exposure.include=*
+
+Production Environment (application-prod.properties)
+
+# Production Database Configuration
+spring.datasource.url=jdbc:postgresql://prod-server:5432/bloodbank_prod
+spring.datasource.username=bloodbank_prod
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.hikari.maximum-pool-size=20
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.connection-timeout=30000
+spring.datasource.hikari.idle-timeout=600000
+spring.datasource.hikari.max-lifetime=1800000
+
+# Production JPA Settings
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.format_sql=false
+logging.level.org.hibernate.SQL=WARN
+
+# Production Server Settings
+server.port=8080
+management.endpoints.web.exposure.include=health,info
+management.endpoint.health.show-details=never
+
+CONNECTION SETUP
+
+1. PostgreSQL Installation
+
+Ubuntu/Debian Installation
+
+# Update package list
+sudo apt update
+
+# Install PostgreSQL
+sudo apt install postgresql postgresql-contrib
+
+# Start PostgreSQL service
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Check status
+sudo systemctl status postgresql
+
+macOS Installation (using Homebrew)
+
+# Install PostgreSQL
+brew install postgresql
+
+# Start PostgreSQL service
+brew services start postgresql
+
+# Check status
+brew services list | grep postgresql
+
+Windows Installation
+
+# Download PostgreSQL installer from official website
+# https://www.postgresql.org/download/windows/
+
+# Or use Chocolatey
+choco install postgresql
+
+2. Database Creation
+
+# Connect to PostgreSQL as superuser
+sudo -u postgres psql
+
+# Create database
+CREATE DATABASE bloodbank;
+
+# Create application user
+CREATE USER bloodbank_user WITH PASSWORD 'secure_password_here';
+
+# Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE bloodbank TO bloodbank_user;
+
+# Connect to bloodbank database
+\c bloodbank
+
+# Grant schema privileges
+GRANT ALL ON SCHEMA public TO bloodbank_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO bloodbank_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO bloodbank_user;
+
+# Exit PostgreSQL
+\q
+
+3. Database Initialization
+
+# Run initialization script
+psql -U bloodbank_user -d bloodbank -f database/init.sql
+
+# Or connect and run manually
+psql -U bloodbank_user -d bloodbank
+\i database/init.sql
+
+DATABASE SCHEMA
+
+1. Core Tables
+
+
+
+Donations Table
+
+CREATE TABLE donations (
+    id BIGSERIAL PRIMARY KEY,
+    donor_id BIGINT NOT NULL,
+    blood_type VARCHAR(10) NOT NULL CHECK (blood_type IN ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE')),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_of_measure VARCHAR(10) NOT NULL,
+    donation_date TIMESTAMP NOT NULL,
+    expiry_date TIMESTAMP NOT NULL,
+    batch_number VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED')),
+    health_screening_passed BOOLEAN DEFAULT false,
+    hemoglobin_level DECIMAL(4,1),
+    blood_pressure VARCHAR(10),
+    pulse_rate INTEGER,
+    temperature DECIMAL(4,1),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (donor_id) REFERENCES users(id)
+);
+
+Requests Table
+
+CREATE TABLE requests (
+    id BIGSERIAL PRIMARY KEY,
+    requester_id BIGINT NOT NULL,
+    hospital_name VARCHAR(255) NOT NULL,
+    patient_name VARCHAR(255) NOT NULL,
+    blood_type VARCHAR(10) NOT NULL CHECK (blood_type IN ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE')),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_of_measure VARCHAR(20) NOT NULL,
+    request_date TIMESTAMP NOT NULL,
+    required_date TIMESTAMP NOT NULL CHECK (required_date >= request_date),
+    priority VARCHAR(10) NOT NULL CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'FULFILLED', 'CANCELLED')),
+    reason TEXT,
+    doctor_name VARCHAR(255),
+    contact_number VARCHAR(20),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(id)
+);
+
+2. Indexes for Performance
+
+-- User indexes
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_blood_type ON users(blood_type);
+CREATE INDEX idx_users_active ON users(is_active);
+
+-- Blood inventory indexes
+CREATE INDEX idx_blood_inventory_type ON blood_inventory(blood_type);
+CREATE INDEX idx_blood_inventory_status ON blood_inventory(status);
+CREATE INDEX idx_blood_inventory_expiry ON blood_inventory(expiry_date);
+CREATE INDEX idx_blood_inventory_type_status ON blood_inventory(blood_type, status);
+
+-- Donation indexes
+CREATE INDEX idx_donations_donor ON donations(donor_id);
+CREATE INDEX idx_donations_date ON donations(donation_date);
+CREATE INDEX idx_donations_status ON donations(status);
+CREATE INDEX idx_donations_blood_type ON donations(blood_type);
+
+-- Request indexes
+CREATE INDEX idx_requests_requester ON requests(requester_id);
+CREATE INDEX idx_requests_status ON requests(status);
+CREATE INDEX idx_requests_priority ON requests(priority);
+CREATE INDEX idx_requests_required_date ON requests(required_date);
+CREATE INDEX idx_requests_status_priority ON requests(status, priority);
+
+3. Constraints and Triggers
+
+-- Update timestamp trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply trigger to all tables
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_blood_inventory_updated_at BEFORE UPDATE ON blood_inventory
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_donations_updated_at BEFORE UPDATE ON donations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_requests_updated_at BEFORE UPDATE ON requests
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CONNECTION POOLING
+
+1. HikariCP Configuration
+
+# HikariCP Connection Pool Settings
+spring.datasource.hikari.maximum-pool-size=20
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.connection-timeout=30000
+spring.datasource.hikari.idle-timeout=600000
+spring.datasource.hikari.max-lifetime=1800000
+spring.datasource.hikari.leak-detection-threshold=60000
+
+# Connection validation
+spring.datasource.hikari.connection-test-query=SELECT 1
+spring.datasource.hikari.validation-timeout=5000
+
+2. Custom DataSource Configuration
+
+File: src/main/java/com/bloodbank/config/DatabaseConfig.java
+
+package com.bloodbank.config;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+
+import javax.sql.DataSource;
+
+@Configuration
+public class DatabaseConfig {
+
+    @Value("${spring.datasource.url}")
+    private String url;
+
+    @Value("${spring.datasource.username}")
+    private String username;
+
+    @Value("${spring.datasource.password}")
+    private String password;
+
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(url);
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setDriverClassName("org.postgresql.Driver");
+        
+        // Connection pool settings
+        config.setMaximumPoolSize(20);
+        config.setMinimumIdle(5);
+        config.setConnectionTimeout(30000);
+        config.setIdleTimeout(600000);
+        config.setMaxLifetime(1800000);
+        config.setLeakDetectionThreshold(60000);
+        
+        // Connection validation
+        config.setConnectionTestQuery("SELECT 1");
+        config.setValidationTimeout(5000);
+        
+        return new HikariDataSource(config);
+    }
+}
+
+SECURITY CONFIGURATION
+
+1. Database User Management
+
+# Create production database user
+CREATE USER bloodbank_prod WITH PASSWORD 'secure_production_password';
+
+# Grant minimal required privileges
+GRANT CONNECT ON DATABASE bloodbank TO bloodbank_prod;
+GRANT USAGE ON SCHEMA public TO bloodbank_prod;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO bloodbank_prod;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bloodbank_prod;
+
+# Revoke unnecessary privileges
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+
+2. SSL Configuration
+
+# Enable SSL connections
+ALTER SYSTEM SET ssl = on;
+ALTER SYSTEM SET ssl_ciphers = 'HIGH:MEDIUM:+3DES:!aNULL';
+
+# Update pg_hba.conf for SSL
+# hostssl bloodbank bloodbank_prod 0.0.0.0/0 md5
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+
+3. Application SSL Configuration
+
+# SSL Database Connection
+spring.datasource.url=jdbc:postgresql://localhost:5432/bloodbank?ssl=true&sslmode=require
+spring.datasource.username=bloodbank_prod
+spring.datasource.password=${DB_PASSWORD}
+
+TROUBLESHOOTING
+
+1. Common Connection Issues
+
+Connection Refused Error
+
+# Check if PostgreSQL is running
+sudo systemctl status postgresql
+
+# Start PostgreSQL if not running
+sudo systemctl start postgresql
+
+# Check port availability
+netstat -tlnp | grep 5432
+
+Authentication Failed
+
+# Check user credentials
+psql -U bloodbank_user -d bloodbank
+
+# Reset password if needed
+ALTER USER bloodbank_user WITH PASSWORD 'new_password';
+
+# Check pg_hba.conf configuration
+sudo nano /etc/postgresql/*/main/pg_hba.conf
+
+Database Does Not Exist
+
+# List all databases
+psql -U postgres -l
+
+# Create database if missing
+createdb -U postgres bloodbank
+
+Connection Timeout
+
+# Check network connectivity
+ping database_server
+
+# Check firewall settings
+sudo ufw status
+sudo ufw allow 5432
+
+# Increase connection timeout
+spring.datasource.hikari.connection-timeout=60000
+
+2. Performance Issues
+
+Slow Queries
+
+# Enable query logging
+ALTER SYSTEM SET log_statement = 'all';
+ALTER SYSTEM SET log_min_duration_statement = 1000;
+
+# Analyze query performance
+EXPLAIN ANALYZE SELECT * FROM users WHERE role = 'DONOR';
+
+# Update table statistics
+ANALYZE;
+
+Connection Pool Exhaustion
+
+# Monitor active connections
+SELECT count(*) FROM pg_stat_activity WHERE state = 'active';
+
+# Check connection pool settings
+SHOW max_connections;
+
+# Adjust pool size if needed
+spring.datasource.hikari.maximum-pool-size=30
+
+Memory Issues
+
+# Check shared buffers
+SHOW shared_buffers;
+
+# Adjust memory settings
+ALTER SYSTEM SET shared_buffers = '256MB';
+ALTER SYSTEM SET effective_cache_size = '1GB';
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+
+3. Logging and Monitoring
+
+# Enable detailed logging
+logging.level.org.springframework.jdbc=DEBUG
+logging.level.org.hibernate.SQL=DEBUG
+logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+
+# Database connection monitoring
+SELECT 
+    datname,
+    usename,
+    application_name,
+    client_addr,
+    state,
+    query_start,
+    query
+FROM pg_stat_activity 
+WHERE state = 'active';
+
+PERFORMANCE OPTIMIZATION
+
+1. Database Tuning
+
+# PostgreSQL Configuration (postgresql.conf)
+max_connections = 200
+shared_buffers = 256MB
+effective_cache_size = 1GB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+checkpoint_completion_target = 0.9
+wal_buffers = 16MB
+default_statistics_target = 100
+
+# Apply changes
+sudo systemctl restart postgresql
+
+2. Query Optimization
+
+# Create additional indexes for common queries
+CREATE INDEX idx_users_role_active ON users(role, is_active);
+CREATE INDEX idx_blood_inventory_type_status_expiry ON blood_inventory(blood_type, status, expiry_date);
+CREATE INDEX idx_requests_status_priority_date ON requests(status, priority, required_date);
+
+# Analyze tables regularly
+ANALYZE users;
+ANALYZE blood_inventory;
+ANALYZE donations;
+ANALYZE requests;
+
+3. Connection Pool Optimization
+
+# Production HikariCP settings
+spring.datasource.hikari.maximum-pool-size=30
+spring.datasource.hikari.minimum-idle=10
+spring.datasource.hikari.connection-timeout=20000
+spring.datasource.hikari.idle-timeout=300000
+spring.datasource.hikari.max-lifetime=1200000
+spring.datasource.hikari.leak-detection-threshold=30000
+
+4. Caching Strategy
+
+# Enable second-level cache
+spring.jpa.properties.hibernate.cache.use_second_level_cache=true
+spring.jpa.properties.hibernate.cache.use_query_cache=true
+spring.jpa.properties.hibernate.cache.region.factory_class=org.hibernate.cache.jcache.JCacheRegionFactory
+
+# Redis configuration for future enhancement
+spring.redis.host=localhost
+spring.redis.port=6379
+spring.redis.password=redis_password
+spring.redis.timeout=2000ms
+spring.redis.jedis.pool.max-active=8
+spring.redis.jedis.pool.max-idle=8
+spring.redis.jedis.pool.min-idle=0
+
+BACKUP AND RECOVERY
+
+1. Database Backup
+
+# Full database backup
+pg_dump -U bloodbank_user -h localhost -d bloodbank > bloodbank_backup.sql
+
+# Compressed backup
+pg_dump -U bloodbank_user -h localhost -d bloodbank | gzip > bloodbank_backup.sql.gz
+
+# Schema only backup
+pg_dump -U bloodbank_user -h localhost -d bloodbank --schema-only > bloodbank_schema.sql
+
+# Data only backup
+pg_dump -U bloodbank_user -h localhost -d bloodbank --data-only > bloodbank_data.sql
+
+2. Database Restoration
+
+# Restore from backup
+psql -U bloodbank_user -d bloodbank < bloodbank_backup.sql
+
+# Restore compressed backup
+gunzip -c bloodbank_backup.sql.gz | psql -U bloodbank_user -d bloodbank
+
+# Restore to new database
+createdb -U postgres bloodbank_restored
+psql -U bloodbank_user -d bloodbank_restored < bloodbank_backup.sql
+
+3. Automated Backup Script
+
+#!/bin/bash
+# backup_script.sh
+
+BACKUP_DIR="/opt/backups/bloodbank"
+DATE=$(date +%Y%m%d_%H%M%S)
+DB_NAME="bloodbank"
+DB_USER="bloodbank_user"
+DB_HOST="localhost"
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Create backup
+pg_dump -U $DB_USER -h $DB_HOST -d $DB_NAME | gzip > $BACKUP_DIR/bloodbank_$DATE.sql.gz
+
+# Remove backups older than 30 days
+find $BACKUP_DIR -name "bloodbank_*.sql.gz" -mtime +30 -delete
+
+# Add to crontab for daily backups
+# 0 2 * * * /opt/scripts/backup_script.sh
+
+MONITORING AND MAINTENANCE
+
+1. Health Checks
+
+# Application health check endpoint
+@RestController
+public class HealthController {
+    
+    @Autowired
+    private DataSource dataSource;
+    
+    @GetMapping("/health/database")
+    public ResponseEntity<Map<String, String>> checkDatabase() {
+        try (Connection connection = dataSource.getConnection()) {
+            Map<String, String> status = new HashMap<>();
+            status.put("status", "UP");
+            status.put("database", "PostgreSQL");
+            status.put("url", connection.getMetaData().getURL());
+            return ResponseEntity.ok(status);
+        } catch (SQLException e) {
+            Map<String, String> status = new HashMap<>();
+            status.put("status", "DOWN");
+            status.put("error", e.getMessage());
+            return ResponseEntity.status(503).body(status);
+        }
+    }
+}
+
+2. Database Monitoring Queries
+
+# Active connections
+SELECT count(*) as active_connections 
+FROM pg_stat_activity 
+WHERE state = 'active';
+
+# Database size
+SELECT pg_size_pretty(pg_database_size('bloodbank')) as database_size;
+
+# Table sizes
+SELECT 
+    schemaname,
+    tablename,
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
+FROM pg_tables 
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+# Slow queries
+SELECT 
+    query,
+    mean_time,
+    calls,
+    total_time
+FROM pg_stat_statements 
+ORDER BY mean_time DESC 
+LIMIT 10;
+
+3. Regular Maintenance Tasks
+
+# Update table statistics
+ANALYZE;
+
+# Vacuum tables
+VACUUM ANALYZE;
+

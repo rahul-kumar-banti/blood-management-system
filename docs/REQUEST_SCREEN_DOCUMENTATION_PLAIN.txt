@@ -1,0 +1,1198 @@
+BLOOD BANK MANAGEMENT SYSTEM - REQUEST SCREEN DOCUMENTATION
+
+TABLE OF CONTENTS
+1. Overview
+2. Database Schema
+3. Backend Implementation
+4. Frontend Implementation
+5. API Endpoints
+6. Usage Examples
+7. Security Considerations
+
+OVERVIEW
+
+The Request Screen is a critical component of the Blood Bank Management System that allows hospitals and medical staff to submit blood requests, track their status, and manage the fulfillment process. The system supports both web-based REST API and desktop Swing client interfaces for comprehensive request management.
+
+DATABASE SCHEMA
+
+Request Table Structure
+
+CREATE TABLE requests (
+    id BIGSERIAL PRIMARY KEY,
+    requester_id BIGINT NOT NULL,
+    hospital_name VARCHAR(255) NOT NULL,
+    patient_name VARCHAR(255) NOT NULL,
+    blood_type VARCHAR(10) NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_of_measure VARCHAR(20) NOT NULL,
+    request_date TIMESTAMP NOT NULL,
+    required_date TIMESTAMP NOT NULL,
+    priority VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    reason TEXT,
+    doctor_name VARCHAR(255),
+    contact_number VARCHAR(20),
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(id)
+);
+
+Key Constraints
+
+-- Quantity must be positive
+ALTER TABLE requests ADD CONSTRAINT chk_requests_quantity_positive 
+    CHECK (quantity > 0);
+
+-- Valid blood types
+ALTER TABLE requests ADD CONSTRAINT chk_requests_blood_type_valid 
+    CHECK (blood_type IN ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 
+                         'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE'));
+
+-- Valid priority values
+ALTER TABLE requests ADD CONSTRAINT chk_requests_priority_valid 
+    CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT'));
+
+-- Valid status values
+ALTER TABLE requests ADD CONSTRAINT chk_requests_status_valid 
+    CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'FULFILLED', 'CANCELLED'));
+
+-- Required date must be after request date
+ALTER TABLE requests ADD CONSTRAINT chk_requests_dates_valid 
+    CHECK (required_date >= request_date);
+
+BACKEND IMPLEMENTATION
+
+1. Entity Class
+
+File: src/main/java/com/bloodbank/entity/Request.java
+
+package com.bloodbank.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@Entity
+@Table(name = "requests")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Request {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requester_id", nullable = false)
+    private User requester;
+    
+    @Column(name = "hospital_name", nullable = false)
+    private String hospitalName;
+    
+    @Column(name = "patient_name", nullable = false)
+    private String patientName;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "blood_type", nullable = false)
+    private BloodType bloodType;
+    
+    @Column(name = "quantity", nullable = false)
+    private Integer quantity;
+    
+    @Column(name = "unit_of_measure", nullable = false)
+    private String unitOfMeasure;
+    
+    @Column(name = "request_date", nullable = false)
+    private LocalDateTime requestDate;
+    
+    @Column(name = "required_date", nullable = false)
+    private LocalDateTime requiredDate;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false)
+    private Priority priority;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private RequestStatus status;
+    
+    @Column(name = "reason")
+    private String reason;
+    
+    @Column(name = "doctor_name")
+    private String doctorName;
+    
+    @Column(name = "contact_number")
+    private String contactNumber;
+    
+    @Column(name = "notes")
+    private String notes;
+    
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+    
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    
+    public enum Priority {
+        LOW, NORMAL, HIGH, URGENT
+    }
+    
+    public enum RequestStatus {
+        PENDING, APPROVED, REJECTED, FULFILLED, CANCELLED
+    }
+}
+
+2. Repository Interface
+
+File: src/main/java/com/bloodbank/repository/RequestRepository.java
+
+package com.bloodbank.repository;
+
+import com.bloodbank.entity.Request;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@Repository
+public interface RequestRepository extends JpaRepository<Request, Long> {
+    
+    List<Request> findByRequesterId(Long requesterId);
+    
+    List<Request> findByStatus(Request.RequestStatus status);
+    
+    List<Request> findByPriority(Request.Priority priority);
+    
+    List<Request> findByBloodType(BloodType bloodType);
+    
+    @Query("SELECT r FROM Request r WHERE r.status = 'PENDING' ORDER BY r.priority DESC, r.requiredDate ASC")
+    List<Request> findPendingRequestsOrderedByPriority();
+    
+    @Query("SELECT r FROM Request r WHERE r.status = 'APPROVED' AND r.requiredDate <= :currentDate")
+    List<Request> findOverdueApprovedRequests(@Param("currentDate") LocalDateTime currentDate);
+    
+    @Query("SELECT r FROM Request r WHERE r.hospitalName LIKE %:hospitalName%")
+    List<Request> findByHospitalNameContaining(@Param("hospitalName") String hospitalName);
+    
+    @Query("SELECT COUNT(r) FROM Request r WHERE r.status = :status")
+    Long countByStatus(@Param("status") Request.RequestStatus status);
+    
+    @Query("SELECT r FROM Request r WHERE r.requiredDate BETWEEN :startDate AND :endDate")
+    List<Request> findRequestsByDateRange(@Param("startDate") LocalDateTime startDate, 
+                                         @Param("endDate") LocalDateTime endDate);
+}
+
+3. Service Layer
+
+File: src/main/java/com/bloodbank/service/RequestService.java
+
+package com.bloodbank.service;
+
+import com.bloodbank.entity.Request;
+import com.bloodbank.entity.User;
+import com.bloodbank.repository.RequestRepository;
+import com.bloodbank.repository.BloodInventoryRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@Service
+@RequiredArgsConstructor
+public class RequestService {
+    
+    private final RequestRepository requestRepository;
+    private final BloodInventoryRepository bloodInventoryRepository;
+    
+    public Request createRequest(Request request) {
+        // Set default values
+        if (request.getRequestDate() == null) {
+            request.setRequestDate(LocalDateTime.now());
+        }
+        if (request.getStatus() == null) {
+            request.setStatus(Request.RequestStatus.PENDING);
+        }
+        
+        return requestRepository.save(request);
+    }
+    
+    public Request updateRequest(Long id, Request requestDetails) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        request.setHospitalName(requestDetails.getHospitalName());
+        request.setPatientName(requestDetails.getPatientName());
+        request.setBloodType(requestDetails.getBloodType());
+        request.setQuantity(requestDetails.getQuantity());
+        request.setUnitOfMeasure(requestDetails.getUnitOfMeasure());
+        request.setRequiredDate(requestDetails.getRequiredDate());
+        request.setPriority(requestDetails.getPriority());
+        request.setReason(requestDetails.getReason());
+        request.setDoctorName(requestDetails.getDoctorName());
+        request.setContactNumber(requestDetails.getContactNumber());
+        request.setNotes(requestDetails.getNotes());
+        
+        return requestRepository.save(request);
+    }
+    
+    public Request updateRequestStatus(Long id, Request.RequestStatus status) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        request.setStatus(status);
+        return requestRepository.save(request);
+    }
+    
+    public void approveRequest(Long id) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        // Check if sufficient blood is available
+        Integer availableQuantity = bloodInventoryRepository
+                .getTotalAvailableQuantityByBloodType(request.getBloodType(), LocalDateTime.now());
+        
+        if (availableQuantity < request.getQuantity()) {
+            throw new RuntimeException("Insufficient blood inventory for this request");
+        }
+        
+        request.setStatus(Request.RequestStatus.APPROVED);
+        requestRepository.save(request);
+    }
+    
+    public void fulfillRequest(Long id) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        if (request.getStatus() != Request.RequestStatus.APPROVED) {
+            throw new RuntimeException("Only approved requests can be fulfilled");
+        }
+        
+        // Reserve blood units for this request
+        reserveBloodUnits(request);
+        
+        request.setStatus(Request.RequestStatus.FULFILLED);
+        requestRepository.save(request);
+    }
+    
+    public void rejectRequest(Long id, String reason) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        request.setStatus(Request.RequestStatus.REJECTED);
+        request.setReason(reason);
+        requestRepository.save(request);
+    }
+    
+    public void cancelRequest(Long id) {
+        Request request = requestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+        
+        if (request.getStatus() == Request.RequestStatus.FULFILLED) {
+            throw new RuntimeException("Cannot cancel fulfilled requests");
+        }
+        
+        request.setStatus(Request.RequestStatus.CANCELLED);
+        requestRepository.save(request);
+    }
+    
+    public List<Request> getAllRequests() {
+        return requestRepository.findAll();
+    }
+    
+    public List<Request> getRequestsByStatus(Request.RequestStatus status) {
+        return requestRepository.findByStatus(status);
+    }
+    
+    public List<Request> getPendingRequests() {
+        return requestRepository.findPendingRequestsOrderedByPriority();
+    }
+    
+    public List<Request> getRequestsByRequester(Long requesterId) {
+        return requestRepository.findByRequesterId(requesterId);
+    }
+    
+    public List<Request> getOverdueRequests() {
+        return requestRepository.findOverdueApprovedRequests(LocalDateTime.now());
+    }
+    
+    private void reserveBloodUnits(Request request) {
+        // Implementation to reserve blood units for the request
+        // This would involve updating blood inventory status to RESERVED
+        // and linking the inventory items to the request
+    }
+}
+
+4. Controller Layer
+
+File: src/main/java/com/bloodbank/controller/RequestController.java
+
+package com.bloodbank.controller;
+
+import com.bloodbank.entity.Request;
+import com.bloodbank.service.RequestService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/requests")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+@Slf4j
+public class RequestController {
+    
+    private final RequestService requestService;
+    
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'TECHNICIAN')")
+    public ResponseEntity<List<Request>> getAllRequests() {
+        List<Request> requests = requestService.getAllRequests();
+        return ResponseEntity.ok(requests);
+    }
+    
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'TECHNICIAN')")
+    public ResponseEntity<Request> getRequestById(@PathVariable Long id) {
+        Request request = requestService.getRequestById(id);
+        return ResponseEntity.ok(request);
+    }
+    
+    @GetMapping("/status/{status}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'TECHNICIAN')")
+    public ResponseEntity<List<Request>> getRequestsByStatus(@PathVariable String status) {
+        try {
+            Request.RequestStatus requestStatus = Request.RequestStatus.valueOf(status.toUpperCase());
+            List<Request> requests = requestService.getRequestsByStatus(requestStatus);
+            return ResponseEntity.ok(requests);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'TECHNICIAN')")
+    public ResponseEntity<List<Request>> getPendingRequests() {
+        List<Request> requests = requestService.getPendingRequests();
+        return ResponseEntity.ok(requests);
+    }
+    
+    @GetMapping("/overdue")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'TECHNICIAN')")
+    public ResponseEntity<List<Request>> getOverdueRequests() {
+        List<Request> requests = requestService.getOverdueRequests();
+        return ResponseEntity.ok(requests);
+    }
+    
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Request> createRequest(@RequestBody Request request) {
+        Request created = requestService.createRequest(request);
+        return ResponseEntity.ok(created);
+    }
+    
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Request> updateRequest(@PathVariable Long id, @RequestBody Request requestDetails) {
+        Request updated = requestService.updateRequest(id, requestDetails);
+        return ResponseEntity.ok(updated);
+    }
+    
+    @PutMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Request> approveRequest(@PathVariable Long id) {
+        Request approved = requestService.approveRequest(id);
+        return ResponseEntity.ok(approved);
+    }
+    
+    @PutMapping("/{id}/fulfill")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'NURSE')")
+    public ResponseEntity<Request> fulfillRequest(@PathVariable Long id) {
+        Request fulfilled = requestService.fulfillRequest(id);
+        return ResponseEntity.ok(fulfilled);
+    }
+    
+    @PutMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Request> rejectRequest(@PathVariable Long id, @RequestParam String reason) {
+        Request rejected = requestService.rejectRequest(id, reason);
+        return ResponseEntity.ok(rejected);
+    }
+    
+    @PutMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Request> cancelRequest(@PathVariable Long id) {
+        Request cancelled = requestService.cancelRequest(id);
+        return ResponseEntity.ok(cancelled);
+    }
+}
+
+FRONTEND IMPLEMENTATION
+
+1. Swing Client Table Model
+
+File: src/main/java/com/bloodbank/client/RequestTableModel.java
+
+package com.bloodbank.client;
+
+import javax.swing.table.AbstractTableModel;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+public class RequestTableModel extends AbstractTableModel {
+    private List<Request> requests = new ArrayList<>();
+    private final String[] columnNames = {
+        "ID", "Hospital", "Patient", "Blood Type", "Quantity", "Priority", "Status", "Required Date", "Request Date"
+    };
+    
+    public void setRequests(List<Request> requests) {
+        this.requests = requests;
+        fireTableDataChanged();
+    }
+    
+    public void addRequest(Request request) {
+        this.requests.add(request);
+        fireTableRowsInserted(this.requests.size() - 1, this.requests.size() - 1);
+    }
+    
+    public void updateRequest(int row, Request request) {
+        if (row >= 0 && row < this.requests.size()) {
+            this.requests.set(row, request);
+            fireTableRowsUpdated(row, row);
+        }
+    }
+    
+    public void removeRequest(int row) {
+        if (row >= 0 && row < this.requests.size()) {
+            this.requests.remove(row);
+            fireTableRowsDeleted(row, row);
+        }
+    }
+    
+    public Request getRequestAt(int row) {
+        if (row >= 0 && row < this.requests.size()) {
+            return this.requests.get(row);
+        }
+        return null;
+    }
+    
+    @Override
+    public int getRowCount() {
+        return requests.size();
+    }
+    
+    @Override
+    public int getColumnCount() {
+        return columnNames.length;
+    }
+    
+    @Override
+    public String getColumnName(int column) {
+        return columnNames[column];
+    }
+    
+    @Override
+    public Object getValueAt(int rowIndex, int columnIndex) {
+        if (rowIndex >= requests.size()) {
+            return null;
+        }
+        
+        Request request = requests.get(rowIndex);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        
+        switch (columnIndex) {
+            case 0: return request.getId();
+            case 1: return request.getHospitalName();
+            case 2: return request.getPatientName();
+            case 3: return request.getBloodType();
+            case 4: return request.getQuantity() + " " + request.getUnitOfMeasure();
+            case 5: return request.getPriority();
+            case 6: return request.getStatus();
+            case 7: return request.getRequiredDate().format(formatter);
+            case 8: return request.getRequestDate().format(formatter);
+            default: return null;
+        }
+    }
+    
+    @Override
+    public boolean isCellEditable(int rowIndex, int columnIndex) {
+        return false; // Make table read-only
+    }
+}
+
+2. Swing Client Service
+
+File: src/main/java/com/bloodbank/client/RequestService.java
+
+package com.bloodbank.client;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.*;
+
+import java.io.IOException;
+import java.util.List;
+
+public class RequestService {
+    private static final String BASE_URL = "http://localhost:8080";
+    private static final String REQUESTS_ENDPOINT = "/requests";
+    
+    private final OkHttpClient client;
+    private final ObjectMapper objectMapper;
+    
+    public RequestService() {
+        this.client = new OkHttpClient();
+        this.objectMapper = new ObjectMapper();
+    }
+    
+    public List<Request> getAllRequests() throws IOException {
+        Request request = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT)
+                .get()
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String json = response.body().string();
+                return objectMapper.readValue(json, new TypeReference<List<Request>>() {});
+            }
+            throw new IOException("Failed to fetch requests: " + response.code());
+        }
+    }
+    
+    public Request createRequest(Request request) throws IOException {
+        String json = objectMapper.writeValueAsString(request);
+        
+        RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+        Request httpRequest = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT)
+                .post(body)
+                .build();
+        
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, Request.class);
+            }
+            throw new IOException("Failed to create request: " + response.code());
+        }
+    }
+    
+    public Request updateRequest(Long id, Request request) throws IOException {
+        String json = objectMapper.writeValueAsString(request);
+        
+        RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+        Request httpRequest = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT + "/" + id)
+                .put(body)
+                .build();
+        
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, Request.class);
+            }
+            throw new IOException("Failed to update request: " + response.code());
+        }
+    }
+    
+    public Request approveRequest(Long id) throws IOException {
+        Request httpRequest = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT + "/" + id + "/approve")
+                .put(RequestBody.create("", null))
+                .build();
+        
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, Request.class);
+            }
+            throw new IOException("Failed to approve request: " + response.code());
+        }
+    }
+    
+    public Request fulfillRequest(Long id) throws IOException {
+        Request httpRequest = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT + "/" + id + "/fulfill")
+                .put(RequestBody.create("", null))
+                .build();
+        
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, Request.class);
+            }
+            throw new IOException("Failed to fulfill request: " + response.code());
+        }
+    }
+    
+    public Request rejectRequest(Long id, String reason) throws IOException {
+        Request httpRequest = new Request.Builder()
+                .url(BASE_URL + REQUESTS_ENDPOINT + "/" + id + "/reject?reason=" + reason)
+                .put(RequestBody.create("", null))
+                .build();
+        
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, Request.class);
+            }
+            throw new IOException("Failed to reject request: " + response.code());
+        }
+    }
+}
+
+3. Swing Client Dialog
+
+File: src/main/java/com/bloodbank/client/RequestDialog.java
+
+package com.bloodbank.client;
+
+import javax.swing.*;
+import java.awt.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+public class RequestDialog extends JDialog {
+    private Request request;
+    private boolean isEditMode;
+    private boolean confirmed = false;
+    
+    // Form fields
+    private JTextField hospitalField;
+    private JTextField patientField;
+    private JComboBox<String> bloodTypeComboBox;
+    private JTextField quantityField;
+    private JComboBox<String> unitComboBox;
+    private JComboBox<String> priorityComboBox;
+    private JComboBox<String> statusComboBox;
+    private JTextField requestDateField;
+    private JTextField requiredDateField;
+    private JTextField doctorField;
+    private JTextField contactField;
+    private JTextArea reasonArea;
+    private JTextArea notesArea;
+    
+    public RequestDialog(JFrame parent, Request request, boolean isEditMode) {
+        super(parent, isEditMode ? "Edit Request" : "Add New Request", true);
+        this.request = request != null ? request : new Request();
+        this.isEditMode = isEditMode;
+        initComponents();
+        loadRequestData();
+        pack();
+        setLocationRelativeTo(parent);
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        
+        // Create form panel
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+        
+        // Hospital
+        gbc.gridx = 0; gbc.gridy = 0;
+        formPanel.add(new JLabel("Hospital:"), gbc);
+        gbc.gridx = 1;
+        hospitalField = new JTextField(15);
+        formPanel.add(hospitalField, gbc);
+        
+        // Patient
+        gbc.gridx = 0; gbc.gridy = 1;
+        formPanel.add(new JLabel("Patient:"), gbc);
+        gbc.gridx = 1;
+        patientField = new JTextField(15);
+        formPanel.add(patientField, gbc);
+        
+        // Blood Type
+        gbc.gridx = 0; gbc.gridy = 2;
+        formPanel.add(new JLabel("Blood Type:"), gbc);
+        gbc.gridx = 1;
+        bloodTypeComboBox = new JComboBox<>(BloodTypeConverter.getDisplayValues());
+        formPanel.add(bloodTypeComboBox, gbc);
+        
+        // Quantity
+        gbc.gridx = 0; gbc.gridy = 3;
+        formPanel.add(new JLabel("Quantity:"), gbc);
+        gbc.gridx = 1;
+        quantityField = new JTextField(15);
+        formPanel.add(quantityField, gbc);
+        
+        // Unit
+        gbc.gridx = 0; gbc.gridy = 4;
+        formPanel.add(new JLabel("Unit:"), gbc);
+        gbc.gridx = 1;
+        unitComboBox = new JComboBox<>(new String[]{"ml", "units", "pints"});
+        formPanel.add(unitComboBox, gbc);
+        
+        // Priority
+        gbc.gridx = 0; gbc.gridy = 5;
+        formPanel.add(new JLabel("Priority:"), gbc);
+        gbc.gridx = 1;
+        priorityComboBox = new JComboBox<>(new String[]{"LOW", "NORMAL", "HIGH", "URGENT"});
+        formPanel.add(priorityComboBox, gbc);
+        
+        // Status
+        gbc.gridx = 0; gbc.gridy = 6;
+        formPanel.add(new JLabel("Status:"), gbc);
+        gbc.gridx = 1;
+        statusComboBox = new JComboBox<>(new String[]{"PENDING", "APPROVED", "FULFILLED", "CANCELLED", "REJECTED"});
+        formPanel.add(statusComboBox, gbc);
+        
+        // Request Date
+        gbc.gridx = 0; gbc.gridy = 7;
+        formPanel.add(new JLabel("Request Date (YYYY-MM-DD):"), gbc);
+        gbc.gridx = 1;
+        requestDateField = new JTextField(15);
+        formPanel.add(requestDateField, gbc);
+        
+        // Required Date
+        gbc.gridx = 0; gbc.gridy = 8;
+        formPanel.add(new JLabel("Required Date (YYYY-MM-DD):"), gbc);
+        gbc.gridx = 1;
+        requiredDateField = new JTextField(15);
+        formPanel.add(requiredDateField, gbc);
+        
+        // Doctor Name
+        gbc.gridx = 0; gbc.gridy = 9;
+        formPanel.add(new JLabel("Doctor Name:"), gbc);
+        gbc.gridx = 1;
+        doctorField = new JTextField(15);
+        formPanel.add(doctorField, gbc);
+        
+        // Contact Number
+        gbc.gridx = 0; gbc.gridy = 10;
+        formPanel.add(new JLabel("Contact Number:"), gbc);
+        gbc.gridx = 1;
+        contactField = new JTextField(15);
+        formPanel.add(contactField, gbc);
+        
+        // Reason
+        gbc.gridx = 0; gbc.gridy = 11;
+        formPanel.add(new JLabel("Reason:"), gbc);
+        gbc.gridx = 1;
+        reasonArea = new JTextArea(3, 15);
+        reasonArea.setLineWrap(true);
+        reasonArea.setWrapStyleWord(true);
+        JScrollPane reasonScrollPane = new JScrollPane(reasonArea);
+        formPanel.add(reasonScrollPane, gbc);
+        
+        // Notes
+        gbc.gridx = 0; gbc.gridy = 12;
+        formPanel.add(new JLabel("Notes:"), gbc);
+        gbc.gridx = 1;
+        notesArea = new JTextArea(3, 15);
+        notesArea.setLineWrap(true);
+        notesArea.setWrapStyleWord(true);
+        JScrollPane notesScrollPane = new JScrollPane(notesArea);
+        formPanel.add(notesScrollPane, gbc);
+        
+        // Buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JButton saveButton = new JButton("Save");
+        JButton cancelButton = new JButton("Cancel");
+        
+        saveButton.addActionListener(e -> saveRequest());
+        cancelButton.addActionListener(e -> dispose());
+        
+        buttonPanel.add(saveButton);
+        buttonPanel.add(cancelButton);
+        
+        // Add components to dialog
+        add(formPanel, BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Set default button
+        getRootPane().setDefaultButton(saveButton);
+    }
+    
+    private void loadRequestData() {
+        if (isEditMode && request != null) {
+            hospitalField.setText(request.getHospitalName());
+            patientField.setText(request.getPatientName());
+            bloodTypeComboBox.setSelectedItem(request.getBloodType().toString());
+            quantityField.setText(String.valueOf(request.getQuantity()));
+            unitComboBox.setSelectedItem(request.getUnitOfMeasure());
+            priorityComboBox.setSelectedItem(request.getPriority().toString());
+            statusComboBox.setSelectedItem(request.getStatus().toString());
+            requestDateField.setText(request.getRequestDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
+            requiredDateField.setText(request.getRequiredDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
+            doctorField.setText(request.getDoctorName());
+            contactField.setText(request.getContactNumber());
+            reasonArea.setText(request.getReason());
+            notesArea.setText(request.getNotes());
+        } else {
+            // Set defaults for new request
+            requestDateField.setText(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
+            requiredDateField.setText(LocalDate.now().plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE));
+            statusComboBox.setSelectedItem("PENDING");
+            priorityComboBox.setSelectedItem("NORMAL");
+        }
+    }
+    
+    private void saveRequest() {
+        try {
+            // Validate inputs
+            if (hospitalField.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please enter hospital name", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            if (patientField.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please enter patient name", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            if (quantityField.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please enter quantity", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            int quantity = Integer.parseInt(quantityField.getText().trim());
+            if (quantity <= 0) {
+                JOptionPane.showMessageDialog(this, "Quantity must be greater than 0", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            // Update request object
+            request.setHospitalName(hospitalField.getText().trim());
+            request.setPatientName(patientField.getText().trim());
+            request.setBloodType(User.BloodType.valueOf(bloodTypeComboBox.getSelectedItem().toString()));
+            request.setQuantity(quantity);
+            request.setUnitOfMeasure(unitComboBox.getSelectedItem().toString());
+            request.setPriority(Request.Priority.valueOf(priorityComboBox.getSelectedItem().toString()));
+            request.setStatus(Request.RequestStatus.valueOf(statusComboBox.getSelectedItem().toString()));
+            request.setRequestDate(LocalDate.parse(requestDateField.getText()).atStartOfDay());
+            request.setRequiredDate(LocalDate.parse(requiredDateField.getText()).atStartOfDay());
+            request.setDoctorName(doctorField.getText().trim());
+            request.setContactNumber(contactField.getText().trim());
+            request.setReason(reasonArea.getText().trim());
+            request.setNotes(notesArea.getText().trim());
+            
+            confirmed = true;
+            dispose();
+            
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid quantity number", "Validation Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Please enter valid dates in YYYY-MM-DD format", "Validation Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    public boolean isConfirmed() {
+        return confirmed;
+    }
+    
+    public Request getRequest() {
+        return request;
+    }
+}
+
+API ENDPOINTS
+
+REST API Documentation
+
+Method          Endpoint                           Description                     Authorization
+GET             /requests                          Get all requests               ADMIN, DOCTOR, NURSE, TECHNICIAN
+GET             /requests/{id}                     Get specific request           ADMIN, DOCTOR, NURSE, TECHNICIAN
+GET             /requests/status/{status}          Get requests by status         ADMIN, DOCTOR, NURSE, TECHNICIAN
+GET             /requests/pending                  Get pending requests           ADMIN, DOCTOR, NURSE, TECHNICIAN
+GET             /requests/overdue                  Get overdue requests           ADMIN, DOCTOR, NURSE, TECHNICIAN
+POST            /requests                          Create new request             ADMIN, DOCTOR, NURSE
+PUT             /requests/{id}                     Update request                 ADMIN, DOCTOR, NURSE
+PUT             /requests/{id}/approve             Approve request                ADMIN, DOCTOR, NURSE
+PUT             /requests/{id}/fulfill             Fulfill request                ADMIN, TECHNICIAN, NURSE
+PUT             /requests/{id}/reject              Reject request                 ADMIN, DOCTOR, NURSE
+PUT             /requests/{id}/cancel              Cancel request                 ADMIN, DOCTOR, NURSE
+
+Request/Response Examples
+
+Create Request
+POST /requests
+Content-Type: application/json
+
+{
+    "requester": {
+        "id": 1
+    },
+    "hospitalName": "City General Hospital",
+    "patientName": "John Doe",
+    "bloodType": "O_POSITIVE",
+    "quantity": 2,
+    "unitOfMeasure": "units",
+    "requestDate": "2024-01-15T10:00:00",
+    "requiredDate": "2024-01-16T14:00:00",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reason": "Emergency surgery",
+    "doctorName": "Dr. Smith",
+    "contactNumber": "+1234567890",
+    "notes": "Patient requires immediate blood transfusion"
+}
+
+Update Request
+PUT /requests/1
+Content-Type: application/json
+
+{
+    "hospitalName": "City General Hospital",
+    "patientName": "John Doe",
+    "bloodType": "O_POSITIVE",
+    "quantity": 3,
+    "unitOfMeasure": "units",
+    "requiredDate": "2024-01-16T16:00:00",
+    "priority": "URGENT",
+    "reason": "Emergency surgery - increased blood requirement",
+    "doctorName": "Dr. Smith",
+    "contactNumber": "+1234567890",
+    "notes": "Patient condition worsened, need more blood"
+}
+
+Approve Request
+PUT /requests/1/approve
+
+Fulfill Request
+PUT /requests/1/fulfill
+
+Reject Request
+PUT /requests/1/reject?reason=Insufficient blood inventory
+
+USAGE EXAMPLES
+
+1. Creating a New Blood Request
+
+// Create new blood request
+Request newRequest = Request.builder()
+    .requester(currentUser)
+    .hospitalName("City General Hospital")
+    .patientName("Jane Smith")
+    .bloodType(User.BloodType.A_POSITIVE)
+    .quantity(2)
+    .unitOfMeasure("units")
+    .requestDate(LocalDateTime.now())
+    .requiredDate(LocalDateTime.now().plusDays(1))
+    .priority(Request.Priority.HIGH)
+    .status(Request.RequestStatus.PENDING)
+    .reason("Emergency surgery")
+    .doctorName("Dr. Johnson")
+    .contactNumber("+1234567890")
+    .notes("Patient requires immediate blood transfusion")
+    .build();
+
+// Save to database
+Request saved = requestService.createRequest(newRequest);
+
+2. Approving a Request
+
+// Approve request after checking inventory
+Request request = requestService.getRequestById(1L);
+requestService.approveRequest(request.getId());
+
+3. Fulfilling a Request
+
+// Fulfill approved request
+Request approvedRequest = requestService.getRequestById(1L);
+if (approvedRequest.getStatus() == Request.RequestStatus.APPROVED) {
+    requestService.fulfillRequest(approvedRequest.getId());
+}
+
+4. Querying Requests by Status
+
+// Get all pending requests
+List<Request> pendingRequests = requestService.getRequestsByStatus(Request.RequestStatus.PENDING);
+
+// Get overdue requests
+List<Request> overdueRequests = requestService.getOverdueRequests();
+
+// Get requests by priority
+List<Request> urgentRequests = requestService.getRequestsByPriority(Request.Priority.URGENT);
+
+SECURITY CONSIDERATIONS
+
+1. Role-Based Access Control
+
+The system implements role-based access control using Spring Security:
+
+- ADMIN: Full access to all request operations
+- DOCTOR: Can create, update, approve, reject, and view requests
+- NURSE: Can create, update, approve, reject, fulfill, and view requests
+- TECHNICIAN: Can fulfill requests and view all requests
+- DONOR/RECIPIENT: No access to request management
+
+2. Input Validation
+
+- All input fields are validated using Bean Validation annotations
+- Quantity must be positive
+- Blood type must be from predefined enum values
+- Priority and status must be from predefined enum values
+- Required date must be after request date
+
+3. Business Logic Validation
+
+- Cannot fulfill requests that are not approved
+- Cannot cancel fulfilled requests
+- Must check blood inventory availability before approving requests
+- Overdue requests are automatically flagged
+
+4. Audit Trail
+
+- All request changes are timestamped
+- created_at and updated_at fields track modification history
+- Status changes are logged for audit purposes
+
+ERROR HANDLING
+
+Common Error Scenarios
+
+1. Insufficient Blood Inventory
+   if (availableQuantity < request.getQuantity()) {
+       throw new RuntimeException("Insufficient blood inventory for this request");
+   }
+
+2. Invalid Request Status Transition
+   if (request.getStatus() != Request.RequestStatus.APPROVED) {
+       throw new RuntimeException("Only approved requests can be fulfilled");
+   }
+
+3. Request Not Found
+   Request request = requestRepository.findById(id)
+           .orElseThrow(() -> new RuntimeException("Request not found"));
+
+4. Invalid Date Range
+   if (requiredDate.isBefore(requestDate)) {
+       throw new RuntimeException("Required date must be after request date");
+   }
+
+PERFORMANCE CONSIDERATIONS
+
+1. Database Indexing
+
+-- Composite index for common queries
+CREATE INDEX idx_requests_status_priority ON requests(status, priority);
+
+-- Index for date range queries
+CREATE INDEX idx_requests_required_date ON requests(required_date);
+
+-- Index for hospital name searches
+CREATE INDEX idx_requests_hospital_name ON requests(hospital_name);
+
+2. Caching Strategy
+
+Consider implementing caching for frequently accessed data:
+
+@Cacheable("requests")
+public List<Request> getAllRequests() {
+    return requestRepository.findAll();
+}
+
+3. Pagination
+
+For large datasets, implement pagination:
+
+@GetMapping
+public ResponseEntity<Page<Request>> getAllRequests(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size) {
+    Pageable pageable = PageRequest.of(page, size);
+    Page<Request> requests = requestRepository.findAll(pageable);
+    return ResponseEntity.ok(requests);
+}
+
+TESTING
+
+Unit Tests
+
+@ExtendWith(MockitoExtension.class)
+class RequestServiceTest {
+    
+    @Mock
+    private RequestRepository requestRepository;
+    
+    @Mock
+    private BloodInventoryRepository bloodInventoryRepository;
+    
+    @InjectMocks
+    private RequestService requestService;
+    
+    @Test
+    void testCreateRequest() {
+        // Test implementation
+    }
+    
+    @Test
+    void testApproveRequest_InsufficientInventory() {
+        // Test implementation
+    }
+    
+    @Test
+    void testFulfillRequest_NotApproved() {
+        // Test implementation
+    }
+}
+
+Integration Tests
+
+@SpringBootTest
+@AutoConfigureTestDatabase
+class RequestControllerIntegrationTest {
+    
+    @Autowired
+    private TestEntityManager entityManager;
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    void testCreateRequest() {
+        // Test implementation
+    }
+    
+    @Test
+    void testApproveRequest() {
+        // Test implementation
+    }
+}
+
+CONCLUSION
+
+The Request Screen provides a comprehensive solution for managing blood requests with both backend REST API and frontend Swing client implementations. The system ensures proper workflow management, inventory validation, and provides a user-friendly interface for medical staff to manage blood requests effectively.
+
+Key features include:
+- Complete CRUD operations for blood requests
+- Role-based access control with appropriate permissions
+- Request status workflow management
+- Priority-based request processing
+- Inventory availability validation
+- Comprehensive audit trail
+- Input validation and error handling
+- Scalable architecture with proper indexing
+
+The implementation follows Spring Boot best practices and provides a solid foundation for blood bank request management operations.

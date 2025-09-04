@@ -1,0 +1,235 @@
+DATABASE CONNECTION CODE SAMPLES
+
+Application Properties
+spring.datasource.url=jdbc:postgresql://localhost:5432/bloodbank
+spring.datasource.username=rahul
+spring.datasource.password=8004
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+Database Creation
+CREATE DATABASE bloodbank;
+CREATE USER bloodbank_user WITH PASSWORD 'password';
+GRANT ALL PRIVILEGES ON DATABASE bloodbank TO bloodbank_user;
+
+Entity Class
+@Entity
+@Table(name = "users")
+@Data
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(unique = true, nullable = false)
+    private String username;
+    
+    @Column(unique = true, nullable = false)
+    private String email;
+    
+    @Column(nullable = false)
+    private String password;
+}
+
+Repository Interface
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByUsername(String username);
+    List<User> findByRole(User.Role role);
+}
+
+Service Class
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    private final UserRepository userRepository;
+    
+    public User createUser(User user) {
+        return userRepository.save(user);
+    }
+    
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+}
+
+Controller Class
+@RestController
+@RequestMapping("/users")
+@RequiredArgsConstructor
+public class UserController {
+    private final UserService userService;
+    
+    @GetMapping
+    public ResponseEntity<List<User>> getAllUsers() {
+        List<User> users = userService.getAllUsers();
+        return ResponseEntity.ok(users);
+    }
+    
+    @PostMapping
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User created = userService.createUser(user);
+        return ResponseEntity.ok(created);
+    }
+}
+
+Database Configuration
+@Configuration
+public class DatabaseConfig {
+    @Bean
+    public DataSource dataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:postgresql://localhost:5432/bloodbank");
+        config.setUsername("bloodbank_user");
+        config.setPassword("password");
+        return new HikariDataSource(config);
+    }
+}
+
+Swing Client Service
+public class UserService {
+    private static final String BASE_URL = "http://localhost:8080";
+    private final OkHttpClient client = new OkHttpClient();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    public List<User> getAllUsers() throws IOException {
+        Request request = new Request.Builder()
+                .url(BASE_URL + "/users")
+                .get()
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            String json = response.body().string();
+            return objectMapper.readValue(json, new TypeReference<List<User>>() {});
+        }
+    }
+}
+
+Swing Dialog
+public class UserDialog extends JDialog {
+    private JTextField usernameField;
+    private JTextField emailField;
+    private JPasswordField passwordField;
+    
+    public UserDialog(JFrame parent, User user) {
+        super(parent, "Add User", true);
+        initComponents();
+        if (user != null) {
+            populateFields(user);
+        }
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        
+        gbc.gridx = 0; gbc.gridy = 0;
+        formPanel.add(new JLabel("Username:"), gbc);
+        gbc.gridx = 1;
+        usernameField = new JTextField(15);
+        formPanel.add(usernameField, gbc);
+        
+        add(formPanel, BorderLayout.CENTER);
+    }
+}
+
+Table Model
+public class UserTableModel extends AbstractTableModel {
+    private List<User> users = new ArrayList<>();
+    private final String[] columnNames = {"ID", "Username", "Email", "Role"};
+    
+    @Override
+    public int getRowCount() {
+        return users.size();
+    }
+    
+    @Override
+    public int getColumnCount() {
+        return columnNames.length;
+    }
+    
+    @Override
+    public Object getValueAt(int row, int col) {
+        User user = users.get(row);
+        switch (col) {
+            case 0: return user.getId();
+            case 1: return user.getUsername();
+            case 2: return user.getEmail();
+            case 3: return user.getRole();
+            default: return null;
+        }
+    }
+}
+
+Maven Dependencies
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>HikariCP</artifactId>
+    </dependency>
+</dependencies>
+
+SQL Queries
+SELECT * FROM users WHERE role = 'DONOR';
+INSERT INTO users (username, email, password) VALUES ('user1', 'user@email.com', 'password');
+UPDATE users SET is_active = false WHERE id = 1;
+DELETE FROM users WHERE id = 1;
+
+Connection Test
+try (Connection conn = DriverManager.getConnection(
+    "jdbc:postgresql://localhost:5432/bloodbank", 
+    "username", "password")) {
+    System.out.println("Connected successfully");
+} catch (SQLException e) {
+    System.out.println("Connection failed: " + e.getMessage());
+}
+
+JWT Configuration
+@Component
+public class JwtService {
+    private String secret = "mySecretKey";
+    private int expiration = 86400000;
+    
+    public String generateToken(User user) {
+        return Jwts.builder()
+                .setSubject(user.getUsername())
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(SignatureAlgorithm.HS512, secret)
+                .compact();
+    }
+}
+
+Security Configuration
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/auth/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            );
+        return http.build();
+    }
+}

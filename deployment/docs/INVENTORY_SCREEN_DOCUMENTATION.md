@@ -1,0 +1,947 @@
+# Blood Bank Management System - Inventory Screen Documentation
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Database Schema](#database-schema)
+3. [Backend Implementation](#backend-implementation)
+4. [Frontend Implementation](#frontend-implementation)
+5. [API Endpoints](#api-endpoints)
+6. [Usage Examples](#usage-examples)
+7. [Security Considerations](#security-considerations)
+
+## Overview
+
+The Inventory Screen is a core component of the Blood Bank Management System that allows staff to manage blood inventory, including adding new blood units, updating quantities, tracking expiry dates, and monitoring blood status. The system supports both web-based REST API and desktop Swing client interfaces.
+
+## Database Schema
+
+### Blood Inventory Table Structure
+
+```sql
+CREATE TABLE blood_inventory (
+    id BIGSERIAL PRIMARY KEY,
+    blood_type VARCHAR(10) NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_of_measure VARCHAR(10) NOT NULL DEFAULT 'ml',
+    expiry_date TIMESTAMP,
+    collection_date TIMESTAMP,
+    donor_id BIGINT,
+    batch_number VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Key Constraints
+
+```sql
+-- Quantity must be non-negative
+ALTER TABLE blood_inventory ADD CONSTRAINT chk_blood_inventory_quantity_non_negative 
+    CHECK (quantity >= 0);
+
+-- Valid blood types
+ALTER TABLE blood_inventory ADD CONSTRAINT chk_blood_inventory_blood_type_valid 
+    CHECK (blood_type IN ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 
+                         'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE'));
+
+-- Valid status values
+ALTER TABLE blood_inventory ADD CONSTRAINT chk_blood_inventory_status_valid 
+    CHECK (status IN ('AVAILABLE', 'RESERVED', 'EXPIRED', 'DISCARDED', 'IN_TRANSIT'));
+```
+
+## Backend Implementation
+
+### 1. Entity Class
+
+**File: `src/main/java/com/bloodbank/entity/BloodInventory.java`**
+
+```java
+package com.bloodbank.entity;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "blood_inventory")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class BloodInventory {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "blood_type", nullable = false)
+    @NotNull(message = "Blood type is required")
+    private User.BloodType bloodType;
+    
+    @Min(value = 0, message = "Quantity cannot be negative")
+    @Column(nullable = false)
+    private Integer quantity;
+    
+    @Column(name = "unit_of_measure")
+    private String unitOfMeasure = "ml";
+    
+    @Column(name = "expiry_date")
+    private LocalDateTime expiryDate;
+    
+    @Column(name = "collection_date")
+    private LocalDateTime collectionDate;
+    
+    @Column(name = "donor_id")
+    private Long donorId;
+    
+    @Column(name = "batch_number")
+    private String batchNumber;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private Status status = Status.AVAILABLE;
+    
+    @Column(name = "notes")
+    private String notes;
+    
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+    
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+    
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+    
+    public enum Status {
+        AVAILABLE, RESERVED, EXPIRED, DISCARDED, IN_TRANSIT
+    }
+}
+```
+
+### 2. Repository Interface
+
+**File: `src/main/java/com/bloodbank/repository/BloodInventoryRepository.java`**
+
+```java
+package com.bloodbank.repository;
+
+import com.bloodbank.entity.BloodInventory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@Repository
+public interface BloodInventoryRepository extends JpaRepository<BloodInventory, Long> {
+    
+    List<BloodInventory> findByBloodType(BloodType bloodType);
+    
+    List<BloodInventory> findByStatus(BloodInventory.Status status);
+    
+    @Query("SELECT bi FROM BloodInventory bi WHERE bi.status = 'AVAILABLE' AND bi.expiryDate > :currentDate")
+    List<BloodInventory> findAvailableInventory(@Param("currentDate") LocalDateTime currentDate);
+    
+    @Query("SELECT bi FROM BloodInventory bi WHERE bi.expiryDate <= :currentDate")
+    List<BloodInventory> findExpiredInventory(@Param("currentDate") LocalDateTime currentDate);
+    
+    @Query("SELECT bi FROM BloodInventory bi WHERE bi.bloodType = :bloodType AND bi.status = 'AVAILABLE' AND bi.expiryDate > :currentDate")
+    List<BloodInventory> findAvailableByBloodType(@Param("bloodType") BloodType bloodType, @Param("currentDate") LocalDateTime currentDate);
+    
+    @Query("SELECT COALESCE(SUM(bi.quantity), 0) FROM BloodInventory bi WHERE bi.bloodType = :bloodType AND bi.status = 'AVAILABLE' AND bi.expiryDate > :currentDate")
+    Integer getTotalAvailableQuantityByBloodType(@Param("bloodType") BloodType bloodType, @Param("currentDate") LocalDateTime currentDate);
+}
+```
+
+### 3. Service Layer
+
+**File: `src/main/java/com/bloodbank/service/BloodInventoryService.java`**
+
+```java
+package com.bloodbank.service;
+
+import com.bloodbank.entity.BloodInventory;
+import com.bloodbank.repository.BloodInventoryRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@Service
+@RequiredArgsConstructor
+public class BloodInventoryService {
+    
+    private final BloodInventoryRepository bloodInventoryRepository;
+    
+    public BloodInventory addBloodUnit(BloodInventory bloodInventory) {
+        return bloodInventoryRepository.save(bloodInventory);
+    }
+    
+    public BloodInventory updateBloodUnit(Long id, BloodInventory bloodInventoryDetails) {
+        BloodInventory bloodInventory = bloodInventoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Blood inventory not found"));
+        
+        bloodInventory.setBloodType(bloodInventoryDetails.getBloodType());
+        bloodInventory.setQuantity(bloodInventoryDetails.getQuantity());
+        bloodInventory.setUnitOfMeasure(bloodInventoryDetails.getUnitOfMeasure());
+        bloodInventory.setExpiryDate(bloodInventoryDetails.getExpiryDate());
+        bloodInventory.setStatus(bloodInventoryDetails.getStatus());
+        bloodInventory.setNotes(bloodInventoryDetails.getNotes());
+        
+        return bloodInventoryRepository.save(bloodInventory);
+    }
+    
+    public void removeBloodUnit(Long id, Integer quantity) {
+        BloodInventory bloodInventory = bloodInventoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Blood inventory not found"));
+        
+        if (bloodInventory.getQuantity() < quantity) {
+            throw new RuntimeException("Insufficient blood quantity");
+        }
+        
+        bloodInventory.setQuantity(bloodInventory.getQuantity() - quantity);
+        
+        if (bloodInventory.getQuantity() == 0) {
+            bloodInventory.setStatus(BloodInventory.Status.DISCARDED);
+        }
+        
+        bloodInventoryRepository.save(bloodInventory);
+    }
+    
+    public List<BloodInventory> getAllBloodInventory() {
+        return bloodInventoryRepository.findAll();
+    }
+    
+    public List<BloodInventory> getAvailableInventory() {
+        return bloodInventoryRepository.findAvailableInventory(LocalDateTime.now());
+    }
+    
+    public List<BloodInventory> getExpiredInventory() {
+        return bloodInventoryRepository.findExpiredInventory(LocalDateTime.now());
+    }
+    
+    public void checkAndUpdateExpiredInventory() {
+        List<BloodInventory> expiredInventory = getExpiredInventory();
+        for (BloodInventory inventory : expiredInventory) {
+            inventory.setStatus(BloodInventory.Status.EXPIRED);
+            bloodInventoryRepository.save(inventory);
+        }
+    }
+}
+```
+
+### 4. Controller Layer
+
+**File: `src/main/java/com/bloodbank/controller/BloodInventoryController.java`**
+
+```java
+package com.bloodbank.controller;
+
+import com.bloodbank.entity.BloodInventory;
+import com.bloodbank.service.BloodInventoryService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+import static com.bloodbank.entity.User.BloodType;
+
+@RestController
+@RequestMapping("/inventory")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+@Slf4j
+public class BloodInventoryController {
+    
+    private final BloodInventoryService bloodInventoryService;
+    
+    @GetMapping
+    public ResponseEntity<List<BloodInventory>> getAllInventory() {
+        List<BloodInventory> inventory = bloodInventoryService.getAllBloodInventory();
+        return ResponseEntity.ok(inventory);
+    }
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<BloodInventory> getInventoryById(@PathVariable Long id) {
+        BloodInventory inventory = bloodInventoryService.getBloodInventoryById(id);
+        return ResponseEntity.ok(inventory);
+    }
+    
+    @GetMapping("/type/{bloodType}")
+    public ResponseEntity<List<BloodInventory>> getInventoryByBloodType(@PathVariable String bloodType) {
+        try {
+            BloodType type = BloodType.valueOf(bloodType.toUpperCase());
+            List<BloodInventory> inventory = bloodInventoryService.getBloodInventoryByType(type);
+            return ResponseEntity.ok(inventory);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @GetMapping("/available")
+    public ResponseEntity<List<BloodInventory>> getAvailableInventory() {
+        List<BloodInventory> inventory = bloodInventoryService.getAvailableInventory();
+        return ResponseEntity.ok(inventory);
+    }
+    
+    @PostMapping("/add")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'NURSE')")
+    public ResponseEntity<BloodInventory> addBloodUnit(@RequestBody BloodInventory bloodInventory) {
+        BloodInventory saved = bloodInventoryService.addBloodUnit(bloodInventory);
+        return ResponseEntity.ok(saved);
+    }
+    
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'NURSE')")
+    public ResponseEntity<BloodInventory> updateBloodUnit(@PathVariable Long id, @RequestBody BloodInventory bloodInventoryDetails) {
+        BloodInventory updated = bloodInventoryService.updateBloodUnit(id, bloodInventoryDetails);
+        return ResponseEntity.ok(updated);
+    }
+    
+    @PostMapping("/{id}/remove")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE')")
+    public ResponseEntity<Void> removeBloodUnit(@PathVariable Long id, @RequestParam Integer quantity) {
+        bloodInventoryService.removeBloodUnit(id, quantity);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @GetMapping("/expired")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public ResponseEntity<List<BloodInventory>> getExpiredInventory() {
+        List<BloodInventory> expired = bloodInventoryService.getExpiredInventory();
+        return ResponseEntity.ok(expired);
+    }
+}
+```
+
+## Frontend Implementation
+
+### 1. Swing Client Table Model
+
+**File: `src/main/java/com/bloodbank/client/BloodInventoryTableModel.java`**
+
+```java
+package com.bloodbank.client;
+
+import javax.swing.table.AbstractTableModel;
+import java.util.ArrayList;
+import java.util.List;
+
+public class BloodInventoryTableModel extends AbstractTableModel {
+    private List<BloodInventory> inventory = new ArrayList<>();
+    private final String[] columnNames = {
+        "ID", "Blood Type", "Quantity", "Unit", "Status", "Expiry Date", "Batch Number", "Created"
+    };
+    
+    public void setInventory(List<BloodInventory> inventory) {
+        this.inventory = inventory;
+        fireTableDataChanged();
+    }
+    
+    public void addInventory(BloodInventory item) {
+        this.inventory.add(item);
+        fireTableRowsInserted(this.inventory.size() - 1, this.inventory.size() - 1);
+    }
+    
+    public void updateInventory(int row, BloodInventory item) {
+        if (row >= 0 && row < this.inventory.size()) {
+            this.inventory.set(row, item);
+            fireTableRowsUpdated(row, row);
+        }
+    }
+    
+    public void removeInventory(int row) {
+        if (row >= 0 && row < this.inventory.size()) {
+            this.inventory.remove(row);
+            fireTableRowsDeleted(row, row);
+        }
+    }
+    
+    public BloodInventory getInventoryAt(int row) {
+        if (row >= 0 && row < this.inventory.size()) {
+            return this.inventory.get(row);
+        }
+        return null;
+    }
+    
+    @Override
+    public int getRowCount() {
+        return inventory.size();
+    }
+    
+    @Override
+    public int getColumnCount() {
+        return columnNames.length;
+    }
+    
+    @Override
+    public String getColumnName(int column) {
+        return columnNames[column];
+    }
+    
+    @Override
+    public Object getValueAt(int rowIndex, int columnIndex) {
+        if (rowIndex >= inventory.size()) {
+            return null;
+        }
+        
+        BloodInventory item = inventory.get(rowIndex);
+        switch (columnIndex) {
+            case 0: return item.getId();
+            case 1: return item.getBloodType();
+            case 2: return item.getQuantity();
+            case 3: return item.getUnitOfMeasure();
+            case 4: return item.getStatus();
+            case 5: return item.getExpiryDate();
+            case 6: return item.getBatchNumber();
+            case 7: return item.getCreatedAt();
+            default: return null;
+        }
+    }
+    
+    @Override
+    public boolean isCellEditable(int rowIndex, int columnIndex) {
+        return false; // Make table read-only
+    }
+}
+```
+
+### 2. Swing Client Service
+
+**File: `src/main/java/com/bloodbank/client/BloodInventoryService.java`**
+
+```java
+package com.bloodbank.client;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.*;
+
+import java.io.IOException;
+import java.util.List;
+
+public class BloodInventoryService {
+    private static final String BASE_URL = "http://localhost:8080";
+    private static final String INVENTORY_ENDPOINT = "/inventory";
+    
+    private final OkHttpClient client;
+    private final ObjectMapper objectMapper;
+    
+    public BloodInventoryService() {
+        this.client = new OkHttpClient();
+        this.objectMapper = new ObjectMapper();
+    }
+    
+    public List<BloodInventory> getAllInventory() throws IOException {
+        Request request = new Request.Builder()
+                .url(BASE_URL + INVENTORY_ENDPOINT)
+                .get()
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String json = response.body().string();
+                return objectMapper.readValue(json, new TypeReference<List<BloodInventory>>() {});
+            }
+            throw new IOException("Failed to fetch inventory: " + response.code());
+        }
+    }
+    
+    public BloodInventory addBloodUnit(BloodInventory inventory) throws IOException {
+        String json = objectMapper.writeValueAsString(inventory);
+        
+        RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+        Request request = new Request.Builder()
+                .url(BASE_URL + INVENTORY_ENDPOINT + "/add")
+                .post(body)
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, BloodInventory.class);
+            }
+            throw new IOException("Failed to add blood unit: " + response.code());
+        }
+    }
+    
+    public BloodInventory updateBloodUnit(Long id, BloodInventory inventory) throws IOException {
+        String json = objectMapper.writeValueAsString(inventory);
+        
+        RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
+        Request request = new Request.Builder()
+                .url(BASE_URL + INVENTORY_ENDPOINT + "/" + id)
+                .put(body)
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseJson = response.body().string();
+                return objectMapper.readValue(responseJson, BloodInventory.class);
+            }
+            throw new IOException("Failed to update blood unit: " + response.code());
+        }
+    }
+    
+    public void removeBloodUnit(Long id, Integer quantity) throws IOException {
+        Request request = new Request.Builder()
+                .url(BASE_URL + INVENTORY_ENDPOINT + "/" + id + "/remove?quantity=" + quantity)
+                .post(RequestBody.create("", null))
+                .build();
+        
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to remove blood unit: " + response.code());
+            }
+        }
+    }
+}
+```
+
+### 3. Swing Client Dialog
+
+**File: `src/main/java/com/bloodbank/client/BloodInventoryDialog.java`**
+
+```java
+package com.bloodbank.client;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class BloodInventoryDialog extends JDialog {
+    private JTextField bloodTypeField;
+    private JTextField quantityField;
+    private JTextField unitField;
+    private JTextField expiryDateField;
+    private JTextField batchNumberField;
+    private JTextArea notesArea;
+    private JComboBox<String> statusCombo;
+    
+    private BloodInventory inventory;
+    private boolean confirmed = false;
+    
+    public BloodInventoryDialog(Frame owner, String title, BloodInventory inventory) {
+        super(owner, title, true);
+        this.inventory = inventory;
+        initComponents();
+        if (inventory != null) {
+            populateFields();
+        }
+        pack();
+        setLocationRelativeTo(owner);
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        
+        // Form panel
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+        
+        // Blood Type
+        gbc.gridx = 0; gbc.gridy = 0;
+        formPanel.add(new JLabel("Blood Type:"), gbc);
+        gbc.gridx = 1;
+        bloodTypeField = new JTextField(15);
+        formPanel.add(bloodTypeField, gbc);
+        
+        // Quantity
+        gbc.gridx = 0; gbc.gridy = 1;
+        formPanel.add(new JLabel("Quantity:"), gbc);
+        gbc.gridx = 1;
+        quantityField = new JTextField(15);
+        formPanel.add(quantityField, gbc);
+        
+        // Unit
+        gbc.gridx = 0; gbc.gridy = 2;
+        formPanel.add(new JLabel("Unit:"), gbc);
+        gbc.gridx = 1;
+        unitField = new JTextField(15);
+        unitField.setText("ml");
+        formPanel.add(unitField, gbc);
+        
+        // Status
+        gbc.gridx = 0; gbc.gridy = 3;
+        formPanel.add(new JLabel("Status:"), gbc);
+        gbc.gridx = 1;
+        statusCombo = new JComboBox<>(new String[]{"AVAILABLE", "RESERVED", "EXPIRED", "DISCARDED", "IN_TRANSIT"});
+        formPanel.add(statusCombo, gbc);
+        
+        // Batch Number
+        gbc.gridx = 0; gbc.gridy = 4;
+        formPanel.add(new JLabel("Batch Number:"), gbc);
+        gbc.gridx = 1;
+        batchNumberField = new JTextField(15);
+        formPanel.add(batchNumberField, gbc);
+        
+        // Notes
+        gbc.gridx = 0; gbc.gridy = 5;
+        formPanel.add(new JLabel("Notes:"), gbc);
+        gbc.gridx = 1;
+        notesArea = new JTextArea(3, 15);
+        notesArea.setLineWrap(true);
+        JScrollPane scrollPane = new JScrollPane(notesArea);
+        formPanel.add(scrollPane, gbc);
+        
+        add(formPanel, BorderLayout.CENTER);
+        
+        // Button panel
+        JPanel buttonPanel = new JPanel();
+        JButton okButton = new JButton("OK");
+        JButton cancelButton = new JButton("Cancel");
+        
+        okButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (validateInput()) {
+                    confirmed = true;
+                    dispose();
+                }
+            }
+        });
+        
+        cancelButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                dispose();
+            }
+        });
+        
+        buttonPanel.add(okButton);
+        buttonPanel.add(cancelButton);
+        add(buttonPanel, BorderLayout.SOUTH);
+    }
+    
+    private void populateFields() {
+        if (inventory != null) {
+            bloodTypeField.setText(inventory.getBloodType().toString());
+            quantityField.setText(String.valueOf(inventory.getQuantity()));
+            unitField.setText(inventory.getUnitOfMeasure());
+            statusCombo.setSelectedItem(inventory.getStatus().toString());
+            batchNumberField.setText(inventory.getBatchNumber());
+            notesArea.setText(inventory.getNotes());
+        }
+    }
+    
+    private boolean validateInput() {
+        try {
+            Integer.parseInt(quantityField.getText());
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid quantity", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        return true;
+    }
+    
+    public BloodInventory getInventory() {
+        if (!confirmed) return null;
+        
+        BloodInventory result = new BloodInventory();
+        result.setBloodType(User.BloodType.valueOf(bloodTypeField.getText()));
+        result.setQuantity(Integer.parseInt(quantityField.getText()));
+        result.setUnitOfMeasure(unitField.getText());
+        result.setStatus(BloodInventory.Status.valueOf(statusCombo.getSelectedItem().toString()));
+        result.setBatchNumber(batchNumberField.getText());
+        result.setNotes(notesArea.getText());
+        
+        return result;
+    }
+    
+    public boolean isConfirmed() {
+        return confirmed;
+    }
+}
+```
+
+## API Endpoints
+
+### REST API Documentation
+
+| Method | Endpoint | Description | Authorization |
+|--------|----------|-------------|---------------|
+| GET | `/inventory` | Get all blood inventory | All authenticated users |
+| GET | `/inventory/{id}` | Get specific inventory item | All authenticated users |
+| GET | `/inventory/type/{bloodType}` | Get inventory by blood type | All authenticated users |
+| GET | `/inventory/available` | Get available inventory | All authenticated users |
+| GET | `/inventory/expired` | Get expired inventory | ADMIN, TECHNICIAN |
+| POST | `/inventory/add` | Add new blood unit | ADMIN, TECHNICIAN, NURSE |
+| PUT | `/inventory/{id}` | Update blood unit | ADMIN, TECHNICIAN, NURSE |
+| POST | `/inventory/{id}/remove` | Remove blood quantity | ADMIN, DOCTOR, NURSE |
+
+### Request/Response Examples
+
+#### Add Blood Unit
+```bash
+POST /inventory/add
+Content-Type: application/json
+
+{
+    "bloodType": "O_POSITIVE",
+    "quantity": 450,
+    "unitOfMeasure": "ml",
+    "expiryDate": "2024-02-15T10:00:00",
+    "batchNumber": "BATCH001",
+    "status": "AVAILABLE",
+    "notes": "Fresh O+ blood donation"
+}
+```
+
+#### Update Blood Unit
+```bash
+PUT /inventory/1
+Content-Type: application/json
+
+{
+    "bloodType": "O_POSITIVE",
+    "quantity": 400,
+    "unitOfMeasure": "ml",
+    "expiryDate": "2024-02-15T10:00:00",
+    "batchNumber": "BATCH001",
+    "status": "RESERVED",
+    "notes": "Reserved for emergency use"
+}
+```
+
+#### Remove Blood Quantity
+```bash
+POST /inventory/1/remove?quantity=100
+```
+
+## Usage Examples
+
+### 1. Adding New Blood Inventory
+
+```java
+// Create new blood inventory
+BloodInventory newInventory = new BloodInventory();
+newInventory.setBloodType(User.BloodType.O_POSITIVE);
+newInventory.setQuantity(450);
+newInventory.setUnitOfMeasure("ml");
+newInventory.setExpiryDate(LocalDateTime.now().plusDays(42));
+newInventory.setBatchNumber("BATCH001");
+newInventory.setStatus(BloodInventory.Status.AVAILABLE);
+newInventory.setNotes("Fresh O+ blood donation");
+
+// Save to database
+BloodInventory saved = bloodInventoryService.addBloodUnit(newInventory);
+```
+
+### 2. Updating Inventory Status
+
+```java
+// Update status to reserved
+BloodInventory inventory = bloodInventoryService.getBloodInventoryById(1L);
+inventory.setStatus(BloodInventory.Status.RESERVED);
+inventory.setNotes("Reserved for emergency surgery");
+
+BloodInventory updated = bloodInventoryService.updateBloodUnit(1L, inventory);
+```
+
+### 3. Removing Blood Units
+
+```java
+// Remove 200ml from inventory
+bloodInventoryService.removeBloodUnit(1L, 200);
+```
+
+### 4. Querying Available Blood
+
+```java
+// Get all available blood
+List<BloodInventory> available = bloodInventoryService.getAvailableInventory();
+
+// Get available blood by type
+List<BloodInventory> oPositive = bloodInventoryService.getAvailableByBloodType(User.BloodType.O_POSITIVE);
+
+// Get total available quantity by type
+Integer totalOPositive = bloodInventoryService.getTotalAvailableQuantityByBloodType(User.BloodType.O_POSITIVE);
+```
+
+## Security Considerations
+
+### 1. Role-Based Access Control
+
+The system implements role-based access control using Spring Security:
+
+- **ADMIN**: Full access to all inventory operations
+- **TECHNICIAN**: Can add, update, and view inventory
+- **NURSE**: Can add, update, remove, and view inventory
+- **DOCTOR**: Can remove blood units and view inventory
+- **DONOR/PATIENT**: Read-only access to inventory
+
+### 2. Input Validation
+
+- All input fields are validated using Bean Validation annotations
+- Quantity must be non-negative
+- Blood type must be from predefined enum values
+- Status must be from predefined enum values
+
+### 3. Audit Trail
+
+- All inventory changes are timestamped
+- `created_at` and `updated_at` fields track modification history
+- Batch numbers provide traceability
+
+### 4. Business Logic Validation
+
+- Cannot remove more blood than available
+- Expired blood is automatically marked as expired
+- Zero quantity inventory is marked as discarded
+
+## Error Handling
+
+### Common Error Scenarios
+
+1. **Insufficient Blood Quantity**
+   ```java
+   if (bloodInventory.getQuantity() < quantity) {
+       throw new RuntimeException("Insufficient blood quantity");
+   }
+   ```
+
+2. **Invalid Blood Type**
+   ```java
+   try {
+       BloodType type = BloodType.valueOf(bloodType.toUpperCase());
+   } catch (IllegalArgumentException e) {
+       return ResponseEntity.badRequest().build();
+   }
+   ```
+
+3. **Inventory Not Found**
+   ```java
+   BloodInventory bloodInventory = bloodInventoryRepository.findById(id)
+           .orElseThrow(() -> new RuntimeException("Blood inventory not found"));
+   ```
+
+## Performance Considerations
+
+### 1. Database Indexing
+
+```sql
+-- Composite index for common queries
+CREATE INDEX idx_blood_inventory_type_status ON blood_inventory(blood_type, status);
+
+-- Index for expiry date queries
+CREATE INDEX idx_blood_inventory_expiry_date ON blood_inventory(expiry_date);
+```
+
+### 2. Caching Strategy
+
+Consider implementing caching for frequently accessed data:
+
+```java
+@Cacheable("bloodInventory")
+public List<BloodInventory> getAllBloodInventory() {
+    return bloodInventoryRepository.findAll();
+}
+```
+
+### 3. Pagination
+
+For large datasets, implement pagination:
+
+```java
+@GetMapping
+public ResponseEntity<Page<BloodInventory>> getAllInventory(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size) {
+    Pageable pageable = PageRequest.of(page, size);
+    Page<BloodInventory> inventory = bloodInventoryRepository.findAll(pageable);
+    return ResponseEntity.ok(inventory);
+}
+```
+
+## Testing
+
+### Unit Tests
+
+```java
+@ExtendWith(MockitoExtension.class)
+class BloodInventoryServiceTest {
+    
+    @Mock
+    private BloodInventoryRepository bloodInventoryRepository;
+    
+    @InjectMocks
+    private BloodInventoryService bloodInventoryService;
+    
+    @Test
+    void testAddBloodUnit() {
+        // Test implementation
+    }
+    
+    @Test
+    void testRemoveBloodUnit_InsufficientQuantity() {
+        // Test implementation
+    }
+}
+```
+
+### Integration Tests
+
+```java
+@SpringBootTest
+@AutoConfigureTestDatabase
+class BloodInventoryControllerIntegrationTest {
+    
+    @Autowired
+    private TestEntityManager entityManager;
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Test
+    void testGetAllInventory() {
+        // Test implementation
+    }
+}
+```
+
+## Conclusion
+
+The Inventory Screen provides a comprehensive solution for managing blood bank inventory with both backend REST API and frontend Swing client implementations. The system ensures data integrity, security, and provides a user-friendly interface for blood bank staff to manage blood inventory effectively.
+
+Key features include:
+- Complete CRUD operations for blood inventory
+- Role-based access control
+- Real-time status tracking
+- Expiry date management
+- Batch number tracking
+- Comprehensive audit trail
+- Input validation and error handling
+- Scalable architecture with proper indexing
+
+The implementation follows Spring Boot best practices and provides a solid foundation for blood bank management operations.
