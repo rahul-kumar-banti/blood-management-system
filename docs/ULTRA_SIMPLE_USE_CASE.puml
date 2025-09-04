@@ -1,0 +1,45 @@
+@startuml Blood Bank Management System - Ultra Simple Use Cases
+!theme plain
+skinparam backgroundColor #FFFFFF
+
+title Blood Bank Management System - Essential Use Cases
+
+' Define actors
+actor "Admin" as ADMIN
+actor "Staff" as STAFF
+actor "User" as USER
+
+' Define use cases
+package "Core Operations" {
+    usecase "Login/Logout" as UC_AUTH
+    usecase "Manage Users" as UC_USERS
+    usecase "Manage Inventory" as UC_INVENTORY
+    usecase "Handle Donations" as UC_DONATIONS
+    usecase "Process Requests" as UC_REQUESTS
+    usecase "Generate Reports" as UC_REPORTS
+}
+
+' Define relationships
+ADMIN --> UC_AUTH
+ADMIN --> UC_USERS
+ADMIN --> UC_INVENTORY
+ADMIN --> UC_DONATIONS
+ADMIN --> UC_REQUESTS
+ADMIN --> UC_REPORTS
+
+STAFF --> UC_AUTH
+STAFF --> UC_INVENTORY
+STAFF --> UC_DONATIONS
+STAFF --> UC_REQUESTS
+STAFF --> UC_REPORTS
+
+USER --> UC_AUTH
+USER --> UC_DONATIONS
+USER --> UC_REQUESTS
+
+' Include relationships
+UC_REPORTS ..> UC_INVENTORY : <<include>>
+UC_REPORTS ..> UC_DONATIONS : <<include>>
+UC_REPORTS ..> UC_REQUESTS : <<include>>
+
+@enduml

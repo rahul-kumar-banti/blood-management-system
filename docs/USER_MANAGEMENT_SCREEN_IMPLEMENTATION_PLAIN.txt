@@ -1,0 +1,1172 @@
+BLOOD BANK MANAGEMENT SYSTEM - USER MANAGEMENT SCREEN IMPLEMENTATION
+
+====================================================================
+
+TABLE OF CONTENTS
+=================
+1. Overview
+2. Backend Implementation
+3. Frontend Implementation
+4. Database Schema
+5. Features
+6. API Endpoints
+7. Usage Examples
+8. Testing
+9. Troubleshooting
+
+1. OVERVIEW
+===========
+
+The User Management Screen provides comprehensive functionality for managing users in the Blood Bank Management System. It allows administrators to create, view, edit, delete, and manage user accounts with different roles and permissions.
+
+Key Features:
+- User Listing: Display all users in a sortable table
+- Add User: Create new users with comprehensive form
+- Edit User: Modify existing user information
+- Delete User: Soft delete users (sets active to false)
+- Activate/Deactivate: Toggle user active status
+- User Search: Filter users by various criteria
+- Real-time Validation: Check username and email availability
+
+2. BACKEND IMPLEMENTATION
+=========================
+
+2.1 User Controller
+
+The UserController handles all user management HTTP requests:
+
+package com.bloodbank.controller;
+
+import com.bloodbank.dto.UserSearchRequest;
+import com.bloodbank.dto.UserUpdateRequest;
+import com.bloodbank.entity.User;
+import com.bloodbank.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/users")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+public class UserController {
+    
+    private final UserService userService;
+    
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<User>> getAllUsers() {
+        List<User> users = userService.getAllUsers();
+        return ResponseEntity.ok(users);
+    }
+    
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id")
+    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+        User user = userService.getUserById(id);
+        return ResponseEntity.ok(user);
+    }
+    
+    @GetMapping("/search")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<User>> searchUsers(@ModelAttribute UserSearchRequest request) {
+        List<User> users = userService.searchUsers(request);
+        return ResponseEntity.ok(users);
+    }
+    
+    @GetMapping("/donors")
+    public ResponseEntity<List<User>> getAllDonors() {
+        List<User> donors = userService.getAllDonors();
+        return ResponseEntity.ok(donors);
+    }
+    
+    @GetMapping("/donors/{bloodType}")
+    public ResponseEntity<List<User>> getDonorsByBloodType(@PathVariable String bloodType) {
+        List<User> donors = userService.getDonorsByBloodType(bloodType);
+        return ResponseEntity.ok(donors);
+    }
+    
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id")
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody UserUpdateRequest request) {
+        User updatedUser = userService.updateUser(id, request);
+        return ResponseEntity.ok(updatedUser);
+    }
+    
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);
+        return ResponseEntity.ok().build();
+    }
+    
+    @PostMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<User> activateUser(@PathVariable Long id) {
+        User activatedUser = userService.activateUser(id);
+        return ResponseEntity.ok(activatedUser);
+    }
+    
+    @PostMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<User> deactivateUser(@PathVariable Long id) {
+        User deactivatedUser = userService.deactivateUser(id);
+        return ResponseEntity.ok(deactivatedUser);
+    }
+}
+
+2.2 User Service
+
+The UserService contains the business logic for user management:
+
+package com.bloodbank.service;
+
+import com.bloodbank.dto.UserSearchRequest;
+import com.bloodbank.dto.UserUpdateRequest;
+import com.bloodbank.entity.User;
+import com.bloodbank.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+    
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+    }
+    
+    public List<User> searchUsers(UserSearchRequest request) {
+        // Implementation for searching users based on criteria
+        return userRepository.findBySearchCriteria(request);
+    }
+    
+    public List<User> getAllDonors() {
+        return userRepository.findByRole("DONOR");
+    }
+    
+    public List<User> getDonorsByBloodType(String bloodType) {
+        return userRepository.findByRoleAndBloodType("DONOR", bloodType);
+    }
+    
+    public User createUser(User user) {
+        // Encode password before saving
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userRepository.save(user);
+    }
+    
+    public User updateUser(Long id, UserUpdateRequest request) {
+        User existingUser = getUserById(id);
+        
+        if (request.getFirstName() != null) {
+            existingUser.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            existingUser.setLastName(request.getLastName());
+        }
+        if (request.getEmail() != null) {
+            existingUser.setEmail(request.getEmail());
+        }
+        if (request.getPhoneNumber() != null) {
+            existingUser.setPhoneNumber(request.getPhoneNumber());
+        }
+        if (request.getBloodType() != null) {
+            existingUser.setBloodType(request.getBloodType());
+        }
+        if (request.getPassword() != null) {
+            existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        
+        return userRepository.save(existingUser);
+    }
+    
+    public void deleteUser(Long id) {
+        User user = getUserById(id);
+        user.setActive(false);
+        userRepository.save(user);
+    }
+    
+    public User activateUser(Long id) {
+        User user = getUserById(id);
+        user.setActive(true);
+        return userRepository.save(user);
+    }
+    
+    public User deactivateUser(Long id) {
+        User user = getUserById(id);
+        user.setActive(false);
+        return userRepository.save(user);
+    }
+    
+    public boolean isUsernameAvailable(String username) {
+        return !userRepository.existsByUsername(username);
+    }
+    
+    public boolean isEmailAvailable(String email) {
+        return !userRepository.existsByEmail(email);
+    }
+}
+
+2.3 User Repository
+
+The UserRepository handles database operations for users:
+
+package com.bloodbank.repository;
+
+import com.bloodbank.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    
+    boolean existsByUsername(String username);
+    boolean existsByEmail(String email);
+    
+    List<User> findByRole(String role);
+    List<User> findByRoleAndBloodType(String role, String bloodType);
+    List<User> findByIsActive(boolean isActive);
+    
+    @Query("SELECT u FROM User u WHERE u.role = 'DONOR' AND u.isActive = true")
+    List<User> findActiveDonors();
+    
+    @Query("SELECT u FROM User u WHERE " +
+           "(:username IS NULL OR u.username LIKE %:username%) AND " +
+           "(:email IS NULL OR u.email LIKE %:email%) AND " +
+           "(:role IS NULL OR u.role = :role) AND " +
+           "(:bloodType IS NULL OR u.bloodType = :bloodType) AND " +
+           "(:isActive IS NULL OR u.isActive = :isActive)")
+    List<User> findBySearchCriteria(@Param("username") String username,
+                                   @Param("email") String email,
+                                   @Param("role") String role,
+                                   @Param("bloodType") String bloodType,
+                                   @Param("isActive") Boolean isActive);
+}
+
+2.4 Data Transfer Objects (DTOs)
+
+UserSearchRequest DTO:
+package com.bloodbank.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class UserSearchRequest {
+    private String username;
+    private String email;
+    private String role;
+    private String bloodType;
+    private Boolean isActive;
+}
+
+UserUpdateRequest DTO:
+package com.bloodbank.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class UserUpdateRequest {
+    private String firstName;
+    private String lastName;
+    private String email;
+    private String phoneNumber;
+    private String bloodType;
+    private String password;
+}
+
+3. FRONTEND IMPLEMENTATION
+==========================
+
+3.1 User Service (Swing Client)
+
+The UserService class handles HTTP operations for the Swing client:
+
+package com.bloodbank.client;
+
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class UserService {
+    
+    private static final String BASE_URL = "http://localhost:8080/api";
+    private String authToken;
+    private final HttpClient httpClient;
+    
+    public UserService() {
+        this.httpClient = HttpClient.newHttpClient();
+    }
+    
+    public void setAuthToken(String authToken) {
+        this.authToken = authToken;
+    }
+    
+    public List<User> getAllUsers() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users"))
+                .header("Authorization", authToken)
+                .GET()
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            return parseUsersFromJson(response.body());
+        } else {
+            throw new RuntimeException("Failed to get users: " + response.body());
+        }
+    }
+    
+    public User createUser(User user) throws Exception {
+        String userJson = convertUserToJson(user);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/auth/register"))
+                .header("Authorization", authToken)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(userJson))
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            return parseUserFromJson(response.body());
+        } else {
+            throw new RuntimeException("Failed to create user: " + response.body());
+        }
+    }
+    
+    public User updateUser(Long id, User user) throws Exception {
+        String userJson = convertUserToJson(user);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users/" + id))
+                .header("Authorization", authToken)
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(userJson))
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            return parseUserFromJson(response.body());
+        } else {
+            throw new RuntimeException("Failed to update user: " + response.body());
+        }
+    }
+    
+    public void deleteUser(Long id) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users/" + id))
+                .header("Authorization", authToken)
+                .DELETE()
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to delete user: " + response.body());
+        }
+    }
+    
+    public User activateUser(Long id) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users/" + id + "/activate"))
+                .header("Authorization", authToken)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            return parseUserFromJson(response.body());
+        } else {
+            throw new RuntimeException("Failed to activate user: " + response.body());
+        }
+    }
+    
+    public User deactivateUser(Long id) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users/" + id + "/deactivate"))
+                .header("Authorization", authToken)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            return parseUserFromJson(response.body());
+        } else {
+            throw new RuntimeException("Failed to deactivate user: " + response.body());
+        }
+    }
+    
+    // Helper methods for JSON parsing (simplified implementation)
+    private List<User> parseUsersFromJson(String json) {
+        // Implementation for parsing JSON array of users
+        // This is a simplified version - in production, use a proper JSON library
+        return null;
+    }
+    
+    private User parseUserFromJson(String json) {
+        // Implementation for parsing single user JSON
+        // This is a simplified version - in production, use a proper JSON library
+        return null;
+    }
+    
+    private String convertUserToJson(User user) {
+        // Implementation for converting user object to JSON
+        // This is a simplified version - in production, use a proper JSON library
+        return "";
+    }
+}
+
+3.2 User Model (Swing Client)
+
+The User class represents a user in the Swing client:
+
+package com.bloodbank.client;
+
+import java.time.LocalDateTime;
+
+public class User {
+    private Long id;
+    private String username;
+    private String email;
+    private String firstName;
+    private String lastName;
+    private String phoneNumber;
+    private String role;
+    private String bloodType;
+    private boolean isActive;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    
+    // Constructors
+    public User() {}
+    
+    public User(String username, String email, String firstName, String lastName, 
+                String phoneNumber, String role, String bloodType) {
+        this.username = username;
+        this.email = email;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phoneNumber = phoneNumber;
+        this.role = role;
+        this.bloodType = bloodType;
+        this.isActive = true;
+    }
+    
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+    
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+    
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    
+    public String getBloodType() { return bloodType; }
+    public void setBloodType(String bloodType) { this.bloodType = bloodType; }
+    
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
+    
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+    
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", username='" + username + '\'' +
+                ", email='" + email + '\'' +
+                ", fullName='" + getFullName() + '\'' +
+                ", role='" + role + '\'' +
+                ", isActive=" + isActive +
+                '}';
+    }
+}
+
+3.3 User Table Model
+
+The UserTableModel manages the data for the user table:
+
+package com.bloodbank.client;
+
+import javax.swing.table.AbstractTableModel;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+public class UserTableModel extends AbstractTableModel {
+    
+    private List<User> users = new ArrayList<>();
+    private final String[] columnNames = {
+        "ID", "Username", "Full Name", "Email", "Role", "Blood Type", "Phone", "Status", "Created"
+    };
+    
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    
+    public void setUsers(List<User> users) {
+        this.users = users;
+        fireTableDataChanged();
+    }
+    
+    public User getUserAt(int row) {
+        if (row >= 0 && row < users.size()) {
+            return users.get(row);
+        }
+        return null;
+    }
+    
+    @Override
+    public int getRowCount() {
+        return users.size();
+    }
+    
+    @Override
+    public int getColumnCount() {
+        return columnNames.length;
+    }
+    
+    @Override
+    public String getColumnName(int column) {
+        return columnNames[column];
+    }
+    
+    @Override
+    public Object getValueAt(int row, int column) {
+        User user = users.get(row);
+        
+        switch (column) {
+            case 0: return user.getId();
+            case 1: return user.getUsername();
+            case 2: return user.getFullName();
+            case 3: return user.getEmail();
+            case 4: return user.getRole();
+            case 5: return user.getBloodType();
+            case 6: return user.getPhoneNumber();
+            case 7: return user.isActive() ? "Active" : "Inactive";
+            case 8: return user.getCreatedAt() != null ? 
+                     user.getCreatedAt().format(dateFormatter) : "";
+            default: return null;
+        }
+    }
+    
+    @Override
+    public boolean isCellEditable(int row, int column) {
+        return false; // Make table read-only
+    }
+    
+    @Override
+    public Class<?> getColumnClass(int column) {
+        switch (column) {
+            case 0: return Long.class;
+            case 7: return String.class;
+            default: return String.class;
+        }
+    }
+}
+
+3.4 User Dialog
+
+The UserDialog provides the form for adding/editing users:
+
+package com.bloodbank.client;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+public class UserDialog extends JDialog {
+    
+    private User user;
+    private boolean isEditMode;
+    private boolean confirmed = false;
+    private UserService userService;
+    
+    // Form components
+    private JTextField usernameField;
+    private JTextField emailField;
+    private JTextField firstNameField;
+    private JTextField lastNameField;
+    private JTextField phoneField;
+    private JComboBox<String> roleComboBox;
+    private JComboBox<String> bloodTypeComboBox;
+    private JPasswordField passwordField;
+    private JCheckBox activeCheckBox;
+    
+    private JButton saveButton;
+    private JButton cancelButton;
+    
+    public UserDialog(JFrame parent, User user, boolean isEditMode, UserService userService) {
+        super(parent, isEditMode ? "Edit User" : "Add User", true);
+        this.user = user;
+        this.isEditMode = isEditMode;
+        this.userService = userService;
+        
+        initializeComponents();
+        layoutComponents();
+        setupEventHandlers();
+        populateFields();
+        
+        setSize(400, 500);
+        setLocationRelativeTo(parent);
+        setResizable(false);
+    }
+    
+    private void initializeComponents() {
+        usernameField = new JTextField(20);
+        emailField = new JTextField(20);
+        firstNameField = new JTextField(20);
+        lastNameField = new JTextField(20);
+        phoneField = new JTextField(20);
+        
+        String[] roles = {"ADMIN", "STAFF", "DONOR", "PATIENT"};
+        roleComboBox = new JComboBox<>(roles);
+        
+        String[] bloodTypes = {"A_POSITIVE", "A_NEGATIVE", "B_POSITIVE", "B_NEGATIVE", 
+                              "AB_POSITIVE", "AB_NEGATIVE", "O_POSITIVE", "O_NEGATIVE"};
+        bloodTypeComboBox = new JComboBox<>(bloodTypes);
+        
+        passwordField = new JPasswordField(20);
+        activeCheckBox = new JCheckBox("Active", true);
+        
+        saveButton = new JButton("Save");
+        cancelButton = new JButton("Cancel");
+    }
+    
+    private void layoutComponents() {
+        setLayout(new BorderLayout());
+        
+        // Main form panel
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
+        
+        // Add form fields
+        formPanel.add(new JLabel("Username:"), gbc);
+        formPanel.add(usernameField, gbc);
+        
+        formPanel.add(new JLabel("Email:"), gbc);
+        formPanel.add(emailField, gbc);
+        
+        formPanel.add(new JLabel("First Name:"), gbc);
+        formPanel.add(firstNameField, gbc);
+        
+        formPanel.add(new JLabel("Last Name:"), gbc);
+        formPanel.add(lastNameField, gbc);
+        
+        formPanel.add(new JLabel("Phone Number:"), gbc);
+        formPanel.add(phoneField, gbc);
+        
+        formPanel.add(new JLabel("Role:"), gbc);
+        formPanel.add(roleComboBox, gbc);
+        
+        formPanel.add(new JLabel("Blood Type:"), gbc);
+        formPanel.add(bloodTypeComboBox, gbc);
+        
+        if (!isEditMode) {
+            formPanel.add(new JLabel("Password:"), gbc);
+            formPanel.add(passwordField, gbc);
+        }
+        
+        formPanel.add(activeCheckBox, gbc);
+        
+        // Button panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        buttonPanel.add(saveButton);
+        buttonPanel.add(cancelButton);
+        
+        add(formPanel, BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.SOUTH);
+    }
+    
+    private void setupEventHandlers() {
+        saveButton.addActionListener(e -> {
+            if (validateForm()) {
+                saveUser();
+            }
+        });
+        
+        cancelButton.addActionListener(e -> {
+            confirmed = false;
+            dispose();
+        });
+    }
+    
+    private void populateFields() {
+        if (user != null) {
+            usernameField.setText(user.getUsername());
+            emailField.setText(user.getEmail());
+            firstNameField.setText(user.getFirstName());
+            lastNameField.setText(user.getLastName());
+            phoneField.setText(user.getPhoneNumber());
+            roleComboBox.setSelectedItem(user.getRole());
+            bloodTypeComboBox.setSelectedItem(user.getBloodType());
+            activeCheckBox.setSelected(user.isActive());
+            
+            // Disable username field in edit mode
+            usernameField.setEnabled(false);
+        }
+    }
+    
+    private boolean validateForm() {
+        if (usernameField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Username is required", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        
+        if (emailField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Email is required", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        
+        if (firstNameField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "First name is required", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        
+        if (lastNameField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Last name is required", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        
+        if (!isEditMode && passwordField.getPassword().length == 0) {
+            JOptionPane.showMessageDialog(this, "Password is required", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    private void saveUser() {
+        try {
+            if (isEditMode) {
+                // Update existing user
+                user.setEmail(emailField.getText().trim());
+                user.setFirstName(firstNameField.getText().trim());
+                user.setLastName(lastNameField.getText().trim());
+                user.setPhoneNumber(phoneField.getText().trim());
+                user.setRole((String) roleComboBox.getSelectedItem());
+                user.setBloodType((String) bloodTypeComboBox.getSelectedItem());
+                user.setActive(activeCheckBox.isSelected());
+                
+                userService.updateUser(user.getId(), user);
+            } else {
+                // Create new user
+                User newUser = new User();
+                newUser.setUsername(usernameField.getText().trim());
+                newUser.setEmail(emailField.getText().trim());
+                newUser.setFirstName(firstNameField.getText().trim());
+                newUser.setLastName(lastNameField.getText().trim());
+                newUser.setPhoneNumber(phoneField.getText().trim());
+                newUser.setRole((String) roleComboBox.getSelectedItem());
+                newUser.setBloodType((String) bloodTypeComboBox.getSelectedItem());
+                newUser.setActive(activeCheckBox.isSelected());
+                
+                userService.createUser(newUser);
+            }
+            
+            confirmed = true;
+            dispose();
+            
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error saving user: " + ex.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    public boolean isConfirmed() {
+        return confirmed;
+    }
+    
+    public User getUser() {
+        return user;
+    }
+}
+
+4. DATABASE SCHEMA
+==================
+
+4.1 Users Table
+
+-- 1. USERS TABLE
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(20),
+    role VARCHAR(20) NOT NULL,
+    blood_type VARCHAR(10),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users table indexes
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_blood_type ON users(blood_type);
+CREATE INDEX idx_users_is_active ON users(is_active);
+CREATE INDEX idx_users_created_at ON users(created_at);
+
+-- Users table constraints
+ALTER TABLE users ADD CONSTRAINT chk_users_username_length 
+    CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 50);
+ALTER TABLE users ADD CONSTRAINT chk_users_password_length 
+    CHECK (LENGTH(password) >= 6);
+ALTER TABLE users ADD CONSTRAINT chk_users_role_valid 
+    CHECK (role IN ('ADMIN', 'STAFF', 'DONOR', 'PATIENT'));
+ALTER TABLE users ADD CONSTRAINT chk_users_blood_type_valid 
+    CHECK (blood_type IN ('A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE', 
+                         'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE'));
+
+5. FEATURES
+===========
+
+5.1 User Management Features
+- User Listing: Display all users in a sortable table
+- Add User: Create new users with a comprehensive form dialog
+- Edit User: Modify existing user information
+- Delete User: Soft delete users (sets active to false)
+- Activate/Deactivate: Toggle user status
+- User Search: Filter users by various criteria
+- Real-time Validation: Check username and email availability
+
+5.2 User Table Features
+- 9 Columns: ID, Username, Full Name, Email, Role, Blood Type, Phone, Status, Created Date
+- Sortable: Click column headers to sort
+- Selectable: Click rows to select users for operations
+- Double-click: Double-click a row to edit the user
+
+5.3 Control Buttons
+- Refresh: Reload user data
+- Add User: Open new user dialog
+- Edit User: Edit selected user
+- Delete User: Delete selected user
+- Activate: Reactivate deactivated user
+- Deactivate: Deactivate active user
+
+6. API ENDPOINTS
+================
+
+6.1 User Management Endpoints
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| GET | /api/users | Get all users | None | List<User> |
+| GET | /api/users/{id} | Get user by ID | None | User |
+| GET | /api/users/search | Search users | UserSearchRequest | List<User> |
+| GET | /api/users/donors | Get all donors | None | List<User> |
+| GET | /api/users/donors/{bloodType} | Get donors by blood type | None | List<User> |
+| PUT | /api/users/{id} | Update user | UserUpdateRequest | User |
+| DELETE | /api/users/{id} | Delete user | None | Void |
+| POST | /api/users/{id}/activate | Activate user | None | User |
+| POST | /api/users/{id}/deactivate | Deactivate user | None | User |
+
+6.2 Request/Response Examples
+
+Get All Users:
+GET /api/users
+Authorization: Bearer <token>
+
+Response:
+[
+    {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@bloodbank.com",
+        "firstName": "System",
+        "lastName": "Administrator",
+        "phoneNumber": "555-0123",
+        "role": "ADMIN",
+        "bloodType": "O_POSITIVE",
+        "isActive": true,
+        "createdAt": "2024-01-15T10:30:00",
+        "updatedAt": "2024-01-15T10:30:00"
+    }
+]
+
+Update User:
+PUT /api/users/1
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "firstName": "Updated",
+    "lastName": "Name",
+    "email": "updated@email.com",
+    "phoneNumber": "555-9999",
+    "bloodType": "A_POSITIVE"
+}
+
+7. USAGE EXAMPLES
+==================
+
+7.1 Starting the User Management Screen
+
+1. Launch the Blood Bank Management System
+2. Login as an administrator
+3. Navigate to the "Users" tab
+4. The user management screen will display all users
+
+7.2 Adding a New User
+
+1. Click "Add User" button
+2. Fill in the form:
+   - Username (required)
+   - Email (required)
+   - Password (required for new users)
+   - First Name (required)
+   - Last Name (required)
+   - Phone Number
+   - Role (select from dropdown)
+   - Blood Type (select from dropdown)
+   - Active Status (checkbox)
+3. Click "Save"
+
+7.3 Editing an Existing User
+
+1. Select a user row in the table
+2. Click "Edit User" button or double-click the row
+3. Modify the desired fields
+4. Click "Save" to update the user
+5. User table will automatically refresh
+
+7.4 Managing User Status
+
+1. Select a user row in the table
+2. Click "Activate" or "Deactivate" button
+3. Confirm the action in the dialog
+4. User status will be updated
+
+7.5 Deleting a User
+
+1. Select a user row in the table
+2. Click "Delete User" button
+3. Confirm deletion in the dialog
+4. User will be soft deleted (set to inactive)
+
+8. TESTING
+===========
+
+8.1 Manual Testing
+
+User Management Testing:
+1. Start both backend and frontend
+2. Login as admin user
+3. Navigate to Users tab
+4. Test all CRUD operations
+5. Verify data persistence
+6. Test error scenarios
+
+8.2 API Testing with cURL
+
+Get All Users:
+curl -X GET http://localhost:8080/api/users \
+  -H "Authorization: Bearer <token>"
+
+Create User:
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newuser",
+    "email": "newuser@email.com",
+    "password": "password123",
+    "firstName": "New",
+    "lastName": "User",
+    "role": "STAFF",
+    "bloodType": "A_POSITIVE"
+  }'
+
+Update User:
+curl -X PUT http://localhost:8080/api/users/1 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Updated",
+    "lastName": "Name"
+  }'
+
+Delete User:
+curl -X DELETE http://localhost:8080/api/users/1 \
+  -H "Authorization: Bearer <token>"
+
+8.3 Unit Testing
+
+UserService Test:
+@SpringBootTest
+class UserServiceTest {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Test
+    void testCreateUser() {
+        User user = new User();
+        user.setUsername("testuser");
+        user.setEmail("test@email.com");
+        user.setFirstName("Test");
+        user.setLastName("User");
+        user.setRole("STAFF");
+        
+        User savedUser = userService.createUser(user);
+        
+        assertNotNull(savedUser.getId());
+        assertEquals("testuser", savedUser.getUsername());
+        assertTrue(savedUser.isActive());
+    }
+    
+    @Test
+    void testUpdateUser() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setFirstName("Updated");
+        request.setLastName("Name");
+        
+        User updatedUser = userService.updateUser(1L, request);
+        
+        assertEquals("Updated", updatedUser.getFirstName());
+        assertEquals("Name", updatedUser.getLastName());
+    }
+}
+
+9. TROUBLESHOOTING
+===================
+
+9.1 Common Issues
+
+1. User Table Not Loading
+   - Check backend: Ensure Spring Boot application is running
+   - Check authentication: Verify admin user is logged in
+   - Check network: Verify localhost:8080 is accessible
+   - Check logs: Look for authentication errors in console
+
+2. Add User Fails
+   - Check validation: Ensure all required fields are filled
+   - Check username/email: Verify they are unique
+   - Check permissions: Ensure user has admin role
+   - Check logs: Look for validation errors
+
+3. Edit User Fails
+   - Check selection: Ensure a user row is selected
+   - Check permissions: Ensure user has admin role
+   - Check validation: Ensure form data is valid
+   - Check logs: Look for update errors
+
+4. Delete User Fails
+   - Check selection: Ensure a user row is selected
+   - Check permissions: Ensure user has admin role
+   - Check confirmation: Ensure deletion is confirmed
+   - Check logs: Look for delete errors
+
+9.2 Debug Steps
+
+1. Enable Debug Logging
+   logging.level.com.bloodbank=DEBUG
+   logging.level.org.springframework.security=DEBUG
+
+2. Check Application Logs
+   - Look for user management operations
+   - Check for validation errors
+   - Verify database queries
+
+3. Test API Endpoints
+   - Use cURL or Postman to test endpoints directly
+   - Verify request/response format
+   - Check HTTP status codes
+
+4. Verify Database
+   -- Check if users table exists
+   \dt users;
+   
+   -- Check if sample users exist
+   SELECT username, role, is_active FROM users;
+
+10. ADDITIONAL RESOURCES
+========================
+
+10.1 Related Documentation
+- API Documentation (API_DOCUMENTATION.md)
+- User Manual (USER_MANUAL.md)
+- Login Screen Implementation (LOGIN_SCREEN_IMPLEMENTATION_PLAIN.txt)
+- Database Schema (DATABASE_INIT_SCRIPT.sql)
+
+10.2 Technical References
+- Spring Data JPA Documentation: https://docs.spring.io/spring-data/jpa/docs/current/reference/html/
+- Swing Documentation: https://docs.oracle.com/javase/tutorial/uiswing/
+- PostgreSQL Documentation: https://www.postgresql.org/docs/
+
+10.3 Best Practices
+- Security: Always validate user permissions
+- Data Validation: Validate all input on both client and server side
+- Error Handling: Provide user-friendly error messages
+- Logging: Log all user management operations for audit
+- Performance: Use pagination for large user lists
+
+====================================================================
+This document provides a comprehensive guide to implementing and using the user management screen in the Blood Bank Management System. For additional support or questions, please refer to the main README or contact the development team.

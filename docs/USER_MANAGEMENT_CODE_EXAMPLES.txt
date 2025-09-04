@@ -1,0 +1,7 @@
+USER MANAGEMENT SCREEN - BACKEND & FRONTEND CODE
+
+BACKEND IMPLEMENTATION
+====================
+
+1. UserController.java
+-------------------
